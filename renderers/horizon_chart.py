@@ -516,6 +516,125 @@ def _grid_trace_h(
         return None
 
 
+def _sh_clip_viewport_h(
+    verts: list,
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+) -> list[tuple[float, float]]:
+    """
+    Sutherland-Hodgman 4 plans (gauche/droite azimut + bas/haut altitude) pour la vue paysage.
+    Travaille en espace (daz, alt) ; gère le wrap azimuthal en déroulant les angles.
+    Retourne [(alt, az), ...] clippé au viewport.
+    """
+    if len(verts) < 3:
+        return []
+    half = az_fov / 2.0
+
+    # Dérouler l'azimut : chaque vertex reste à ≤ 180° du précédent
+    poly: list[tuple[float, float]] = []  # (daz, alt)
+    prev_az = verts[0][1]
+    for alt, az in verts:
+        d = ((az - prev_az + 180) % 360) - 180
+        unwrapped = prev_az + d
+        poly.append((unwrapped - az_center, alt))
+        prev_az = unwrapped
+
+    def _clip_one(polygon: list, inside, t_calc) -> list:
+        if not polygon:
+            return []
+        out = []
+        n = len(polygon)
+        for i in range(n):
+            curr = polygon[i]
+            prev = polygon[(i - 1) % n]
+            ci, pi = inside(curr), inside(prev)
+            if ci:
+                if not pi:
+                    tc = t_calc(prev, curr)
+                    out.append((prev[0] + tc * (curr[0] - prev[0]),
+                                prev[1] + tc * (curr[1] - prev[1])))
+                out.append(curr)
+            elif pi:
+                tc = t_calc(prev, curr)
+                out.append((prev[0] + tc * (curr[0] - prev[0]),
+                            prev[1] + tc * (curr[1] - prev[1])))
+        return out
+
+    # Plan gauche : daz >= -half
+    poly = _clip_one(poly, lambda p: p[0] >= -half,
+                     lambda p1, p2: (-half - p1[0]) / (p2[0] - p1[0]))
+    # Plan droit : daz <= +half
+    poly = _clip_one(poly, lambda p: p[0] <= half,
+                     lambda p1, p2: (half - p1[0]) / (p2[0] - p1[0]))
+    # Plan bas : alt >= alt_min
+    poly = _clip_one(poly, lambda p: p[1] >= alt_min,
+                     lambda p1, p2: (alt_min - p1[1]) / (p2[1] - p1[1]))
+    # Plan haut : alt <= alt_max
+    poly = _clip_one(poly, lambda p: p[1] <= alt_max,
+                     lambda p1, p2: (alt_max - p1[1]) / (p2[1] - p1[1]))
+
+    if len(poly) < 3:
+        return []
+    # Reconvertir en (alt, az)
+    return [(alt, (az_center + daz) % 360) for daz, alt in poly]
+
+
+def _milkyway_traces_h(
+    observer: Observer,
+    t,
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+    width: int,
+    height: int,
+) -> list[go.Scatter]:
+    """Polygones de densité de la Voie Lactée (mw.json) pour la vue paysage.
+    Un trace Plotly par couche (ol1→ol5), tous les anneaux concaténés.
+    """
+    try:
+        from collections import defaultdict
+        from engines.milkyway import get_milkyway_polygons_altaz, MW_COLOR
+        r, g, b = MW_COLOR
+
+        groups: dict[float, tuple[list, list]] = defaultdict(lambda: ([], []))
+
+        for verts, opacity in get_milkyway_polygons_altaz(observer, t):
+            clipped = _sh_clip_viewport_h(verts, az_center, az_fov, alt_min, alt_max)
+            if len(clipped) < 3:
+                continue
+            xs_g, ys_g = groups[opacity]
+            for alt, az in clipped:
+                xy = _project(alt, az, az_center, az_fov, alt_min, alt_max,
+                              width, height, clip=False)
+                if xy:
+                    xs_g.append(xy[0]); ys_g.append(xy[1])
+            xs_g.append(None); ys_g.append(None)
+
+        traces = []
+        for opacity in sorted(groups):
+            xs, ys = groups[opacity]
+            while xs and xs[-1] is None:
+                xs.pop(); ys.pop()
+            if sum(1 for v in xs if v is not None) < 3:
+                continue
+            c = f'rgba({r},{g},{b},{opacity:.3f})'
+            traces.append(go.Scatter(
+                x=xs, y=ys,
+                mode='lines',
+                fill='toself',
+                fillcolor=c,
+                line=dict(color=c, width=0),
+                hoverinfo='skip',
+                showlegend=False,
+            ))
+        return traces
+    except Exception:
+        return []
+
+
 def _messier_traces(
     messier_df: pd.DataFrame,
     az_center: float,
@@ -589,6 +708,7 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
     "show_ecliptic":     False,
     "show_grid":         False,
     "show_messier":      False,
+    "show_milkyway":     False,
 }
 
 
@@ -627,6 +747,10 @@ def build_horizon_chart(
         hoverinfo='skip',
         showlegend=False,
     ))
+
+    if opts['show_milkyway']:
+        for tr in _milkyway_traces_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height):
+            fig.add_trace(tr)
 
     if opts['show_grid']:
         tr = _grid_trace_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height)

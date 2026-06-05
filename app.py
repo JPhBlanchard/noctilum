@@ -108,6 +108,7 @@ _DEFAULTS: dict = {
     "show_ecliptic":     False,
     "show_grid":         False,
     "show_messier":      False,
+    "show_milkyway":     False,
     # Vue
     "view_mode": "🔭 Zénith",
     "az_center": 180,
@@ -115,7 +116,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.0-horizon"
+_STATE_VERSION = "3.2-mw-allrings"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -313,6 +314,7 @@ with st.sidebar:
     st.checkbox("Plan de l'écliptique",       key="show_ecliptic")
     st.checkbox("Méridiens & parallèles",     key="show_grid")
     st.checkbox("Objets de Messier",          key="show_messier")
+    st.checkbox("Voie Lactée",                key="show_milkyway")
     if st.session_state.get("show_messier"):
         st.markdown(
             """
@@ -356,6 +358,7 @@ try:
             "show_ecliptic":     bool(st.session_state.show_ecliptic),
             "show_grid":         bool(st.session_state.show_grid),
             "show_messier":      bool(st.session_state.show_messier),
+            "show_milkyway":     bool(st.session_state.show_milkyway),
         }
 
         _is_horizon = st.session_state.get("view_mode") == "🌄 Paysage"

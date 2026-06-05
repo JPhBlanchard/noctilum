@@ -427,7 +427,108 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
     "show_ecliptic":     False,
     "show_grid":         False,
     "show_messier":      False,
+    "show_milkyway":     False,
 }
+
+
+def _sh_clip_alt(verts: list, alt_min: float) -> list:
+    """Sutherland-Hodgman : clip le polygone en conservant les sommets alt >= alt_min."""
+    if len(verts) < 3:
+        return []
+    result = []
+    n = len(verts)
+    for i in range(n):
+        curr_alt, curr_az = verts[i]
+        prev_alt, prev_az = verts[(i - 1) % n]
+        curr_in = curr_alt >= alt_min
+        prev_in = prev_alt >= alt_min
+        if curr_in:
+            if not prev_in:
+                t   = (alt_min - prev_alt) / (curr_alt - prev_alt)
+                daz = ((curr_az - prev_az + 180) % 360) - 180
+                result.append((alt_min, (prev_az + t * daz) % 360))
+            result.append((curr_alt, curr_az))
+        elif prev_in:
+            t   = (alt_min - prev_alt) / (curr_alt - prev_alt)
+            daz = ((curr_az - prev_az + 180) % 360) - 180
+            result.append((alt_min, (prev_az + t * daz) % 360))
+    return result
+
+
+def _fill_horizon_arcs(clipped: list, alt_min: float, step_deg: float = 5.0) -> list:
+    """
+    Insère des points intermédiaires à alt_min entre des sommets consécutifs tous deux
+    à l'horizon quand l'écart azimuthal est grand.  Cela ferme correctement le polygone
+    le long du bord du cercle horizon au lieu d'une corde rectiligne qui traverserait
+    le disque et remplirait la mauvaise région.
+    """
+    if len(clipped) < 3:
+        return clipped
+    result: list = []
+    n = len(clipped)
+    tol = 0.02
+    for i in range(n):
+        alt, az = clipped[i]
+        result.append((alt, az))
+        next_alt, next_az = clipped[(i + 1) % n]
+        if abs(alt - alt_min) < tol and abs(next_alt - alt_min) < tol:
+            daz = ((next_az - az + 180) % 360) - 180   # diff signée (chemin court)
+            if abs(daz) > step_deg * 2:
+                steps = max(2, int(abs(daz) / step_deg))
+                for k in range(1, steps):
+                    result.append((alt_min, (az + daz * k / steps) % 360))
+    return result
+
+
+def _milkyway_traces(
+    observer: Observer,
+    t,
+    width: int,
+    height: int,
+) -> list[go.Scatter]:
+    """Polygones de densité de la Voie Lactée (mw.json) pour la vue zénith.
+    Un trace Plotly par couche (ol1→ol5), tous les anneaux concaténés.
+    """
+    try:
+        from collections import defaultdict
+        from engines.milkyway import get_milkyway_polygons_altaz, MW_COLOR
+        r, g, b = MW_COLOR
+
+        groups: dict[float, tuple[list, list]] = defaultdict(lambda: ([], []))
+
+        for verts, opacity in get_milkyway_polygons_altaz(observer, t):
+            clipped = _sh_clip_alt(verts, 0.0)
+            if len(clipped) < 3:
+                continue
+            clipped = _fill_horizon_arcs(clipped, 0.0)
+            xs_g, ys_g = groups[opacity]
+            for alt, az in clipped:
+                xy = altaz_to_xy(alt, az, width, height)
+                if xy:
+                    xs_g.append(xy[0]); ys_g.append(xy[1])
+            xs_g.append(None); ys_g.append(None)   # séparateur entre polygones
+
+        traces = []
+        for opacity in sorted(groups):
+            xs, ys = groups[opacity]
+            # Supprimer le None final
+            while xs and xs[-1] is None:
+                xs.pop(); ys.pop()
+            if sum(1 for v in xs if v is not None) < 3:
+                continue
+            c = f'rgba({r},{g},{b},{opacity:.3f})'
+            traces.append(go.Scatter(
+                x=xs, y=ys,
+                mode='lines',
+                fill='toself',
+                fillcolor=c,
+                line=dict(color=c, width=0),
+                hoverinfo='skip',
+                showlegend=False,
+            ))
+        return traces
+    except Exception:
+        return []
 
 
 def _messier_traces(messier_df: pd.DataFrame, width: int, height: int) -> list[go.Scatter]:
@@ -524,7 +625,12 @@ def build_sky_chart(
         showlegend=False,
     ))
 
-    # Grille céleste (couche la plus basse)
+    # Voie Lactée (couche la plus basse — derrière tout le reste)
+    if opts["show_milkyway"]:
+        for tr in _milkyway_traces(observer, t, width, height):
+            fig.add_trace(tr)
+
+    # Grille céleste
     if opts["show_grid"]:
         tr = _grid_trace(observer, t, width, height)
         if tr is not None:
