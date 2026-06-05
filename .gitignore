@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Données volumineuses (téléchargées automatiquement)
+data/de440s.bsp
+data/hip_main.dat
+data/bsc5.json
+
+# IDE
+.idea/
+.vscode/
