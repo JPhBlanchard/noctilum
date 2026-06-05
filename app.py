@@ -452,9 +452,16 @@ Skyfield · Éphéméride JPL DE440s
 **Sources de données**
 - Catalogue d'étoiles : *Yale Bright Star Catalogue* (BSC5) — brettonw / Yale
 - Constellations & limites IAU : *d3-celestial* — Olaf Frohn
+- Voie Lactée : *mw.json* (polygones de densité galactique) — d3-celestial / Olaf Frohn
 - Catalogue Messier : données IAU / SEDS
 - Fond cartographique : CartoDB Dark Matter · © OpenStreetMap contributors
 - Géocodage : Nominatim (OpenStreetMap)
+
+---
+
+**Vues disponibles**
+- 🔭 Zénith — projection stéréographique azimutale centrée sur le zénith
+- 🌄 Paysage — projection équirectangulaire (azimut × altitude) vers l'horizon
             """
         )
 
