@@ -314,3 +314,124 @@ def get_constellation_labels(
         result.append((xy[0], xy[1], name))
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# API pour la vue paysage (retourne alt/az bruts, sans projection)
+# ---------------------------------------------------------------------------
+
+def get_constellation_altaz_boundaries(
+    observer: Observer,
+    t=None,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """
+    Retourne les segments de limites IAU au-dessus de l'horizon.
+    Format : [((alt1, az1), (alt2, az2)), …]
+    """
+    from skyfield.api import Star
+
+    pairs = _load_bounds()
+    if not pairs:
+        return []
+
+    ra1  = np.array([p[0][0] for p in pairs])
+    dec1 = np.array([p[0][1] for p in pairs])
+    ra2  = np.array([p[1][0] for p in pairs])
+    dec2 = np.array([p[1][1] for p in pairs])
+
+    eph      = _get_eph()
+    t_sky    = _to_sky_time(t)
+    location = observer.skyfield_location()
+    obs      = eph["earth"] + location
+
+    s1 = Star(ra_hours=ra1, dec_degrees=dec1)
+    s2 = Star(ra_hours=ra2, dec_degrees=dec2)
+
+    alt1_a, az1_a, _ = obs.at(t_sky).observe(s1).apparent().altaz("standard")
+    alt2_a, az2_a, _ = obs.at(t_sky).observe(s2).apparent().altaz("standard")
+
+    result = []
+    for alt1, az1, alt2, az2 in zip(
+        alt1_a.degrees, az1_a.degrees,
+        alt2_a.degrees, az2_a.degrees,
+    ):
+        if alt1 < 0.0 or alt2 < 0.0:
+            continue
+        result.append(((alt1, az1), (alt2, az2)))
+
+    return result
+
+
+def get_constellation_altaz_segments(
+    observer: Observer,
+    t=None,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """
+    Retourne les segments de constellations au-dessus de l'horizon.
+    Format : [((alt1, az1), (alt2, az2)), …]
+    """
+    from skyfield.api import Star
+
+    pairs = _load_pairs()
+    if not pairs:
+        return []
+
+    ra1  = np.array([p[0][0] for p in pairs])
+    dec1 = np.array([p[0][1] for p in pairs])
+    ra2  = np.array([p[1][0] for p in pairs])
+    dec2 = np.array([p[1][1] for p in pairs])
+
+    eph      = _get_eph()
+    t_sky    = _to_sky_time(t)
+    location = observer.skyfield_location()
+    obs      = eph["earth"] + location
+
+    s1 = Star(ra_hours=ra1, dec_degrees=dec1)
+    s2 = Star(ra_hours=ra2, dec_degrees=dec2)
+
+    alt1_a, az1_a, _ = obs.at(t_sky).observe(s1).apparent().altaz("standard")
+    alt2_a, az2_a, _ = obs.at(t_sky).observe(s2).apparent().altaz("standard")
+
+    result = []
+    for alt1, az1, alt2, az2 in zip(
+        alt1_a.degrees, az1_a.degrees,
+        alt2_a.degrees, az2_a.degrees,
+    ):
+        if alt1 < 0.0 or alt2 < 0.0:
+            continue
+        result.append(((alt1, az1), (alt2, az2)))
+
+    return result
+
+
+def get_constellation_altaz_labels(
+    observer: Observer,
+    t=None,
+) -> list[tuple[float, float, str]]:
+    """
+    Retourne les centres de constellations au-dessus de l'horizon.
+    Format : [(alt, az, nom), …]
+    """
+    from skyfield.api import Star
+
+    centers = _load_centers()
+    if not centers:
+        return []
+
+    ra_arr  = np.array([c[0] for c in centers])
+    dec_arr = np.array([c[1] for c in centers])
+    names   = [c[2] for c in centers]
+
+    eph      = _get_eph()
+    t_sky    = _to_sky_time(t)
+    location = observer.skyfield_location()
+    obs      = eph["earth"] + location
+
+    stars = Star(ra_hours=ra_arr, dec_degrees=dec_arr)
+    alt_a, az_a, _ = obs.at(t_sky).observe(stars).apparent().altaz("standard")
+
+    return [
+        (alt, az, name)
+        for alt, az, name in zip(alt_a.degrees, az_a.degrees, names)
+        if alt >= 5.0
+    ]

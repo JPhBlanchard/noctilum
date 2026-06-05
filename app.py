@@ -16,6 +16,7 @@ from streamlit_folium import st_folium
 from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
+from renderers.horizon_chart import build_horizon_chart
 from renderers.sky_chart import build_sky_chart
 
 # ─── Configuration de la page ────────────────────────────────────────────────
@@ -67,6 +68,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ─── Helpers interface ───────────────────────────────────────────────────────
+
+def _az_to_compass(az: int) -> str:
+    _DIRS = [
+        (0, 'N'), (22, 'NNE'), (45, 'NE'), (67, 'ENE'),
+        (90, 'E'), (112, 'ESE'), (135, 'SE'), (157, 'SSE'),
+        (180, 'S'), (202, 'SSO'), (225, 'SO'), (247, 'OSO'),
+        (270, 'O'), (292, 'ONO'), (315, 'NO'), (337, 'NNO'),
+    ]
+    az_mod = az % 360
+    return min(_DIRS, key=lambda d: min(abs(d[0] - az_mod), 360 - abs(d[0] - az_mod)))[1]
+
 # ─── Catalogue BSC5 mis en cache ─────────────────────────────────────────────
 
 @st.cache_resource(show_spinner="Chargement du catalogue BSC5…")
@@ -95,11 +108,14 @@ _DEFAULTS: dict = {
     "show_ecliptic":     False,
     "show_grid":         False,
     "show_messier":      False,
+    # Vue
+    "view_mode": "🔭 Zénith",
+    "az_center": 180,
     "place_label":       "Observatoire de Paris",
     "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "2.5-paris"
+_STATE_VERSION = "3.0-horizon"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -272,6 +288,21 @@ with st.sidebar:
 
     st.divider()
 
+    # ── Vue ──
+    st.subheader("👁 Vue")
+    view_mode = st.radio(
+        "Mode",
+        ["🔭 Zénith", "🌄 Paysage"],
+        horizontal=True,
+        key="view_mode",
+        label_visibility="collapsed",
+    )
+    if view_mode == "🌄 Paysage":
+        az_center = st.slider("Direction (az.)", 0, 359, key="az_center", format="%d°")
+        st.caption(f"↗ {az_center}° — {_az_to_compass(az_center)}")
+
+    st.divider()
+
     # ── Affichage ──
     st.subheader("🗺 Affichage")
     st.checkbox("Étoiles",                    key="show_stars")
@@ -315,20 +346,34 @@ try:
             get_messier_visible(observer, t)
             if st.session_state.show_messier else None
         )
-        sky_fig      = build_sky_chart(
-            stars_df, planets_data, observer, t,
-            messier_df=messier_df,
-            options={
-                "show_stars":        bool(st.session_state.show_stars),
-                "show_planets":      bool(st.session_state.show_planets),
-                "show_const_lines":  bool(st.session_state.show_const_lines),
-                "show_const_names":  bool(st.session_state.show_const_names),
-                "show_const_bounds": bool(st.session_state.show_const_bounds),
-                "show_ecliptic":     bool(st.session_state.show_ecliptic),
-                "show_grid":         bool(st.session_state.show_grid),
-                "show_messier":      bool(st.session_state.show_messier),
-            },
-        )
+
+        _display_options = {
+            "show_stars":        bool(st.session_state.show_stars),
+            "show_planets":      bool(st.session_state.show_planets),
+            "show_const_lines":  bool(st.session_state.show_const_lines),
+            "show_const_names":  bool(st.session_state.show_const_names),
+            "show_const_bounds": bool(st.session_state.show_const_bounds),
+            "show_ecliptic":     bool(st.session_state.show_ecliptic),
+            "show_grid":         bool(st.session_state.show_grid),
+            "show_messier":      bool(st.session_state.show_messier),
+        }
+
+        _is_horizon = st.session_state.get("view_mode") == "🌄 Paysage"
+        _az_center  = int(st.session_state.get("az_center", 180))
+
+        if _is_horizon:
+            sky_fig = build_horizon_chart(
+                stars_df, planets_data, observer, t,
+                az_center=float(_az_center),
+                messier_df=messier_df,
+                options=_display_options,
+            )
+        else:
+            sky_fig = build_sky_chart(
+                stars_df, planets_data, observer, t,
+                messier_df=messier_df,
+                options=_display_options,
+            )
 
         # TSL en heures, minutes, secondes
         tsl   = local_sidereal_time(observer, t)
@@ -376,7 +421,7 @@ with col_chart:
         sky_fig,
         use_container_width=True,
         config={"displayModeBar": False, "scrollZoom": False},
-        key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}",
+        key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_is_horizon}_{_az_center}",
     )
     with st.popover("ℹ️ À propos", use_container_width=False):
         st.markdown(

@@ -167,3 +167,59 @@ def get_celestial_grid(
 
     alts, azs = _project_points(ra_arr, dec_arr, obs, t_sky, width, height)
     return _altaz_to_plotly(alts, azs, width, height, segments)
+
+
+# ---------------------------------------------------------------------------
+# API pour la vue paysage (retourne alt/az bruts, sans projection)
+# ---------------------------------------------------------------------------
+
+def get_ecliptic_altaz(
+    observer: Observer,
+    t=None,
+    step_deg: int = 2,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Retourne (alts, azs) pour l'écliptique — tableaux numpy, degrés."""
+    eps = math.radians(_EPS_DEG)
+    lons = np.arange(0, 361, step_deg, dtype=float)
+    lam  = np.radians(lons)
+    ra_rad  = np.arctan2(np.cos(eps) * np.sin(lam), np.cos(lam))
+    dec_rad = np.arcsin(np.sin(eps) * np.sin(lam))
+    ra_h  = (np.degrees(ra_rad) % 360.0) / 15.0
+    dec_d = np.degrees(dec_rad)
+    eph   = _get_eph()
+    t_sky = _to_sky_time(t)
+    obs   = eph["earth"] + observer.skyfield_location()
+    return _project_points(ra_h, dec_d, obs, t_sky, 0, 0)
+
+
+def get_celestial_grid_altaz(
+    observer: Observer,
+    t=None,
+    ra_step_h: int = 2,
+    dec_step_deg: int = 30,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """
+    Retourne une liste de (alts, azs) — un tableau par ligne de grille.
+    """
+    eph   = _get_eph()
+    t_sky = _to_sky_time(t)
+    obs   = eph["earth"] + observer.skyfield_location()
+
+    result = []
+    dec_pts = np.arange(-85.0, 85.1, 2.0)
+    for ra_h in range(0, 24, ra_step_h):
+        ra_arr  = np.full_like(dec_pts, float(ra_h))
+        alts, azs = _project_points(ra_arr, dec_pts, obs, t_sky, 0, 0)
+        result.append((alts, azs))
+
+    ra_pts  = np.arange(0.0, 361.0, 2.0) / 15.0
+    max_abs = 85.0
+    dec_from = -dec_step_deg * int(max_abs // dec_step_deg)
+    for dec_d in range(dec_from, int(max_abs) + 1, dec_step_deg):
+        if abs(dec_d) > max_abs:
+            continue
+        dec_arr = np.full_like(ra_pts, float(dec_d))
+        alts, azs = _project_points(ra_pts, dec_arr, obs, t_sky, 0, 0)
+        result.append((alts, azs))
+
+    return result
