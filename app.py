@@ -117,7 +117,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.2-mw-allrings"
+_STATE_VERSION = "3.3-eyepiece-full"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -300,7 +300,7 @@ with st.sidebar:
         az_center = st.slider("Direction (az.)", 0, 359, key="az_center", format="%d°")
         st.caption(f"↗ {az_center}° — {_az_to_compass(az_center)}")
     if view_mode == "🔭 Oculaire":
-        st.slider("Champ (FOV)", 1, 20, 5, key="eyepiece_fov", format="%d°")
+        st.slider("Champ (FOV)", 1, 60, 15, key="eyepiece_fov", format="%d°")
         st.text_input("🔍 Objet", key="search_query",
                       placeholder="Sirius, M42, Andromède, Jupiter…")
         _q = st.session_state.get("search_query", "").strip()
@@ -387,9 +387,13 @@ try:
 
         if _is_eyepiece:
             from engines.search_catalog import resolve_target
-            _fov    = float(st.session_state.get("eyepiece_fov", 5))
+            _fov    = float(st.session_state.get("eyepiece_fov", 15))
             _target = st.session_state.get("_eyepiece_target")
             _stars_ep = catalog.get_visible(observer, t, mag_limit=8.0)
+            _messier_ep = (
+                get_messier_visible(observer, t)
+                if _display_options.get("show_messier") else None
+            )
             if _target is None:
                 _alt_ep, _az_ep, _lbl_ep = 90.0, 0.0, "Zénith"
             else:
@@ -398,6 +402,11 @@ try:
             sky_fig = build_eyepiece_chart(
                 _alt_ep, _az_ep, _lbl_ep,
                 _stars_ep, fov_deg=_fov,
+                options=_display_options,
+                planets_data=planets_data,
+                messier_df=_messier_ep,
+                observer=observer,
+                t=t,
             )
         elif _is_horizon:
             sky_fig = build_horizon_chart(
@@ -459,7 +468,7 @@ with col_chart:
         sky_fig,
         use_container_width=True,
         config={"displayModeBar": False, "scrollZoom": False},
-        key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_is_horizon}_{_az_center}",
+        key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}",
     )
     with st.popover("ℹ️ À propos", use_container_width=False):
         st.markdown(
