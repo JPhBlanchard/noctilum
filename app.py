@@ -16,6 +16,7 @@ from streamlit_folium import st_folium
 from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
+from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
 from renderers.sky_chart import build_sky_chart
 
@@ -290,7 +291,7 @@ with st.sidebar:
     st.subheader("👁 Vue")
     view_mode = st.radio(
         "Mode",
-        ["🔭 Zénith", "🌄 Paysage"],
+        ["🌌 Zénith", "🌄 Paysage", "🔭 Oculaire"],
         horizontal=True,
         key="view_mode",
         label_visibility="collapsed",
@@ -298,6 +299,22 @@ with st.sidebar:
     if view_mode == "🌄 Paysage":
         az_center = st.slider("Direction (az.)", 0, 359, key="az_center", format="%d°")
         st.caption(f"↗ {az_center}° — {_az_to_compass(az_center)}")
+    if view_mode == "🔭 Oculaire":
+        st.slider("Champ (FOV)", 1, 20, 5, key="eyepiece_fov", format="%d°")
+        st.text_input("🔍 Objet", key="search_query",
+                      placeholder="Sirius, M42, Andromède, Jupiter…")
+        _q = st.session_state.get("search_query", "").strip()
+        if _q:
+            from engines.search_catalog import search as _search
+            _cached_planets = st.session_state.get("_planets_cache", [])
+            _results = _search(_q, _cached_planets)
+            if _results:
+                _opts = [f"{r.label} — {r.description}" for r in _results]
+                _choice = st.selectbox("", _opts, key="search_choice",
+                                       label_visibility="collapsed")
+                st.session_state["_eyepiece_target"] = _results[_opts.index(_choice)]
+            else:
+                st.caption("Aucun résultat.")
 
     st.divider()
 
@@ -356,10 +373,33 @@ try:
             "show_milkyway":     bool(st.session_state.show_milkyway),
         }
 
-        _is_horizon = st.session_state.get("view_mode") == "🌄 Paysage"
-        _az_center  = int(st.session_state.get("az_center", 180))
+        # Mettre en cache les planètes pour la recherche (sidebar rendu avant calcul)
+        st.session_state["_planets_cache"] = [
+            {"name": p["name"], "alt": p["alt"], "az": p["az"],
+             "magnitude": p.get("magnitude"), "above_horizon": p.get("above_horizon", True)}
+            for p in planets_data
+        ]
 
-        if _is_horizon:
+        _view      = st.session_state.get("view_mode", "🌌 Zénith")
+        _is_horizon  = _view == "🌄 Paysage"
+        _is_eyepiece = _view == "🔭 Oculaire"
+        _az_center   = int(st.session_state.get("az_center", 180))
+
+        if _is_eyepiece:
+            from engines.search_catalog import resolve_target
+            _fov    = float(st.session_state.get("eyepiece_fov", 5))
+            _target = st.session_state.get("_eyepiece_target")
+            _stars_ep = catalog.get_visible(observer, t, mag_limit=8.0)
+            if _target is None:
+                _alt_ep, _az_ep, _lbl_ep = 90.0, 0.0, "Zénith"
+            else:
+                _alt_ep, _az_ep = resolve_target(_target, observer, t, planets_data)
+                _lbl_ep = _target.label
+            sky_fig = build_eyepiece_chart(
+                _alt_ep, _az_ep, _lbl_ep,
+                _stars_ep, fov_deg=_fov,
+            )
+        elif _is_horizon:
             sky_fig = build_horizon_chart(
                 stars_df, planets_data, observer, t,
                 az_center=float(_az_center),
