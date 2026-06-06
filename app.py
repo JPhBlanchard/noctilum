@@ -235,10 +235,6 @@ with st.sidebar:
             _nlat = round(_clicked["lat"], 4)
             _nlon = round(_clicked["lng"], 4)
             _click_id = (_nlat, _nlon)
-            # Ne traiter que les clics NON encore traités — pas de st.rerun() :
-            # st_folium déclenche déjà son propre rerun ; on met à jour le session
-            # state ici pour que les widgets suivants (lat/lon/chart) se rendent
-            # directement avec les nouvelles valeurs dans cette même passe.
             if _click_id != st.session_state.get("_last_click_id"):
                 st.session_state._last_click_id = _click_id
                 st.session_state.lat         = _nlat
@@ -258,6 +254,7 @@ with st.sidebar:
         elev = st.number_input("Alt m", key="elev", min_value=0, max_value=8848,
                                step=1, format="%d")
 
+    st.button("🔄 Actualiser")
     st.divider()
 
     # ── Date & Heure ──
@@ -308,13 +305,13 @@ with st.sidebar:
     st.subheader("🗺 Affichage")
     st.checkbox("Étoiles",                    key="show_stars")
     st.checkbox("Planètes",                   key="show_planets")
+    st.checkbox("Voie Lactée",                key="show_milkyway")
     st.checkbox("Lignes de constellations",   key="show_const_lines")
     st.checkbox("Noms de constellations",     key="show_const_names")
     st.checkbox("Limites de constellations",  key="show_const_bounds")
     st.checkbox("Plan de l'écliptique",       key="show_ecliptic")
     st.checkbox("Méridiens & parallèles",     key="show_grid")
     st.checkbox("Objets de Messier",          key="show_messier")
-    st.checkbox("Voie Lactée",                key="show_milkyway")
     if st.session_state.get("show_messier"):
         st.markdown(
             """
@@ -330,8 +327,6 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-    st.divider()
-    st.button("🔄 Actualiser")
 
 # ─── Calculs ─────────────────────────────────────────────────────────────────
 

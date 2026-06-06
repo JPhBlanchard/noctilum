@@ -4,3 +4,5 @@ plotly>=5.20
 pandas>=2.0
 numpy>=1.26
 requests
+healpy>=1.16
+astropy>=5.3

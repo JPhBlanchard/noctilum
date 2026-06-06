@@ -8,6 +8,8 @@ __pycache__/
 data/de440s.bsp
 data/hip_main.dat
 data/bsc5.json
+data/milkyway.png
+data/mw_density_n128.npy
 
 # IDE
 .idea/

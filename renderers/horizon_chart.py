@@ -532,14 +532,24 @@ def _sh_clip_viewport_h(
         return []
     half = az_fov / 2.0
 
-    # Dérouler l'azimut : chaque vertex reste à ≤ 180° du précédent
-    poly: list[tuple[float, float]] = []  # (daz, alt)
-    prev_az = verts[0][1]
-    for alt, az in verts:
-        d = ((az - prev_az + 180) % 360) - 180
-        unwrapped = prev_az + d
-        poly.append((unwrapped - az_center, alt))
-        prev_az = unwrapped
+    # Normalise le premier sommet en [-180, 180] par rapport à az_center,
+    # puis déroule les suivants pour éviter les sauts > 180° entre voisins.
+    # Sans cette normalisation, les polygones croisant N (0°/360°) ont leurs
+    # daz autour de 300-400 et ne sont jamais clippés correctement.
+    first_alt, first_az = verts[0]
+    first_daz = ((first_az - az_center + 180) % 360) - 180
+    poly: list[tuple[float, float]] = [(first_daz, first_alt)]
+    prev_daz = first_daz
+
+    for alt, az in verts[1:]:
+        curr_daz = ((az - az_center + 180) % 360) - 180
+        diff = curr_daz - prev_daz
+        if diff > 180:
+            curr_daz -= 360
+        elif diff < -180:
+            curr_daz += 360
+        poly.append((curr_daz, alt))
+        prev_daz = curr_daz
 
     def _clip_one(polygon: list, inside, t_calc) -> list:
         if not polygon:
@@ -591,43 +601,33 @@ def _milkyway_traces_h(
     width: int,
     height: int,
 ) -> list[go.Scatter]:
-    """Polygones de densité de la Voie Lactée (mw.json) pour la vue paysage.
-    Un trace Plotly par couche (ol1→ol5), tous les anneaux concaténés.
-    """
+    """Voie Lactée image-réelle (Stellarium) — vue paysage."""
     try:
-        from collections import defaultdict
-        from engines.milkyway import get_milkyway_polygons_altaz, MW_COLOR
-        r, g, b = MW_COLOR
-
-        groups: dict[float, tuple[list, list]] = defaultdict(lambda: ([], []))
-
-        for verts, opacity in get_milkyway_polygons_altaz(observer, t):
-            clipped = _sh_clip_viewport_h(verts, az_center, az_fov, alt_min, alt_max)
-            if len(clipped) < 3:
-                continue
-            xs_g, ys_g = groups[opacity]
-            for alt, az in clipped:
-                xy = _project(alt, az, az_center, az_fov, alt_min, alt_max,
-                              width, height, clip=False)
-                if xy:
-                    xs_g.append(xy[0]); ys_g.append(xy[1])
-            xs_g.append(None); ys_g.append(None)
-
+        from engines.milky_way import get_milky_way_scatter, get_galactic_center_altaz
+        mw = get_milky_way_scatter(
+            observer, t, mode="landscape",
+            width=width, height=height,
+            az_center=az_center, az_fov=az_fov,
+            alt_min=alt_min, alt_max=alt_max,
+        )
         traces = []
-        for opacity in sorted(groups):
-            xs, ys = groups[opacity]
-            while xs and xs[-1] is None:
-                xs.pop(); ys.pop()
-            if sum(1 for v in xs if v is not None) < 3:
-                continue
-            c = f'rgba({r},{g},{b},{opacity:.3f})'
+        if mw["x"]:
             traces.append(go.Scatter(
-                x=xs, y=ys,
-                mode='lines',
-                fill='toself',
-                fillcolor=c,
-                line=dict(color=c, width=0),
-                hoverinfo='skip',
+                x=mw["x"], y=mw["y"],
+                mode="markers",
+                marker=dict(size=mw["size"], color=mw["rgba"]),
+                hoverinfo="skip",
+                showlegend=False,
+            ))
+        gc_alt, gc_az = get_galactic_center_altaz(observer, t)
+        gc_xy = _project(gc_alt, gc_az, az_center, az_fov, alt_min, alt_max, width, height)
+        if gc_xy:
+            traces.append(go.Scatter(
+                x=[gc_xy[0]], y=[gc_xy[1]],
+                mode="markers",
+                marker=dict(symbol="cross-thin", size=14, color="red",
+                            line=dict(color="red", width=2)),
+                hovertemplate="Centre galactique<br>Alt %.1f°  Az %.1f°<extra></extra>" % (gc_alt, gc_az),
                 showlegend=False,
             ))
         return traces

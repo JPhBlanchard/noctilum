@@ -486,44 +486,28 @@ def _milkyway_traces(
     width: int,
     height: int,
 ) -> list[go.Scatter]:
-    """Polygones de densité de la Voie Lactée (mw.json) pour la vue zénith.
-    Un trace Plotly par couche (ol1→ol5), tous les anneaux concaténés.
-    """
+    """Voie Lactée image-réelle (Stellarium) — vue zénith."""
     try:
-        from collections import defaultdict
-        from engines.milkyway import get_milkyway_polygons_altaz, MW_COLOR
-        r, g, b = MW_COLOR
-
-        groups: dict[float, tuple[list, list]] = defaultdict(lambda: ([], []))
-
-        for verts, opacity in get_milkyway_polygons_altaz(observer, t):
-            clipped = _sh_clip_alt(verts, 0.0)
-            if len(clipped) < 3:
-                continue
-            clipped = _fill_horizon_arcs(clipped, 0.0)
-            xs_g, ys_g = groups[opacity]
-            for alt, az in clipped:
-                xy = altaz_to_xy(alt, az, width, height)
-                if xy:
-                    xs_g.append(xy[0]); ys_g.append(xy[1])
-            xs_g.append(None); ys_g.append(None)   # séparateur entre polygones
-
+        from engines.milky_way import get_milky_way_scatter, get_galactic_center_altaz
+        mw = get_milky_way_scatter(observer, t, mode="zenith", width=width, height=height)
         traces = []
-        for opacity in sorted(groups):
-            xs, ys = groups[opacity]
-            # Supprimer le None final
-            while xs and xs[-1] is None:
-                xs.pop(); ys.pop()
-            if sum(1 for v in xs if v is not None) < 3:
-                continue
-            c = f'rgba({r},{g},{b},{opacity:.3f})'
+        if mw["x"]:
             traces.append(go.Scatter(
-                x=xs, y=ys,
-                mode='lines',
-                fill='toself',
-                fillcolor=c,
-                line=dict(color=c, width=0),
-                hoverinfo='skip',
+                x=mw["x"], y=mw["y"],
+                mode="markers",
+                marker=dict(size=mw["size"], color=mw["rgba"]),
+                hoverinfo="skip",
+                showlegend=False,
+            ))
+        gc_alt, gc_az = get_galactic_center_altaz(observer, t)
+        gc_xy = altaz_to_xy(gc_alt, gc_az, width, height)
+        if gc_xy:
+            traces.append(go.Scatter(
+                x=[gc_xy[0]], y=[gc_xy[1]],
+                mode="markers",
+                marker=dict(symbol="cross-thin", size=14, color="red",
+                            line=dict(color="red", width=2)),
+                hovertemplate="Centre galactique<br>Alt %.1f°  Az %.1f°<extra></extra>" % (gc_alt, gc_az),
                 showlegend=False,
             ))
         return traces
