@@ -110,6 +110,11 @@ _DEFAULTS: dict = {
     "show_grid":         False,
     "show_messier":      False,
     "show_milkyway":     False,
+    "show_satellites":   False,
+    # Satellites
+    "sat_group":     "ISS / Stations",
+    "sat_trail_min": 5,
+    "sat_selected":  [],
     # Vue
     "view_mode": "🔭 Zénith",
     "az_center": 180,
@@ -117,7 +122,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.3-eyepiece-full"
+_STATE_VERSION = "3.4-satellites"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -344,6 +349,38 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
+    st.divider()
+
+    # ── Satellites ──
+    st.subheader("🛰 Satellites")
+    st.checkbox("Satellites artificiels", key="show_satellites")
+    if st.session_state.get("show_satellites"):
+        from engines.satellite_engine import GROUPS, list_satellites
+        _sat_group = st.selectbox(
+            "Groupe", list(GROUPS.keys()),
+            key="sat_group",
+        )
+        _sat_trail = st.slider(
+            "Trajectoire (±min)", 1, 15, 5,
+            key="sat_trail_min",
+        )
+        with st.spinner("Chargement TLE…"):
+            _sat_names = list_satellites(_sat_group)
+        if _sat_names:
+            _sat_selected = st.multiselect(
+                "Satellites",
+                _sat_names,
+                default=_sat_names[:1],
+                key="sat_selected",
+                placeholder="Choisir…",
+            )
+        else:
+            st.caption("Impossible de charger les TLE.")
+            _sat_selected = []
+    else:
+        _sat_selected = []
+        _sat_trail = 5
+
 
 # ─── Calculs ─────────────────────────────────────────────────────────────────
 
@@ -361,6 +398,21 @@ try:
             if st.session_state.show_messier else None
         )
 
+        # Satellites
+        _show_sat = bool(st.session_state.get("show_satellites", False))
+        _sat_data = []
+        _sat_selected_calc = st.session_state.get("sat_selected", [])
+        if _show_sat and _sat_selected_calc:
+            from engines.satellite_engine import get_satellites_data
+            _sat_group_key = st.session_state.get("sat_group", "ISS / Stations")
+            _sat_trail_min = float(st.session_state.get("sat_trail_min", 5))
+            _sat_data = get_satellites_data(
+                observer, t,
+                group=_sat_group_key,
+                selected=_sat_selected_calc,
+                trail_min=_sat_trail_min,
+            )
+
         _display_options = {
             "show_stars":        bool(st.session_state.show_stars),
             "show_planets":      bool(st.session_state.show_planets),
@@ -371,6 +423,7 @@ try:
             "show_grid":         bool(st.session_state.show_grid),
             "show_messier":      bool(st.session_state.show_messier),
             "show_milkyway":     bool(st.session_state.show_milkyway),
+            "show_satellites":   _show_sat,
         }
 
         # Mettre en cache les planètes pour la recherche (sidebar rendu avant calcul)
@@ -407,6 +460,7 @@ try:
                 messier_df=_messier_ep,
                 observer=observer,
                 t=t,
+                satellites_data=_sat_data,
             )
         elif _is_horizon:
             sky_fig = build_horizon_chart(
@@ -414,12 +468,14 @@ try:
                 az_center=float(_az_center),
                 messier_df=messier_df,
                 options=_display_options,
+                satellites_data=_sat_data,
             )
         else:
             sky_fig = build_sky_chart(
                 stars_df, planets_data, observer, t,
                 messier_df=messier_df,
                 options=_display_options,
+                satellites_data=_sat_data,
             )
 
         # TSL en heures, minutes, secondes

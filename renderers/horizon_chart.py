@@ -712,6 +712,65 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
 }
 
 
+def _satellite_traces_h(
+    satellites_data: list[dict],
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+    width: int,
+    height: int,
+) -> list[go.Scatter]:
+    traces = []
+    for sat in satellites_data:
+        # Passé
+        px, py = [], []
+        for alt, az in zip(sat["past_alts"], sat["past_azs"]):
+            xy = _project(alt, az, az_center, az_fov, alt_min, alt_max, width, height, clip=False)
+            if xy and alt >= alt_min:
+                px.append(xy[0]); py.append(xy[1])
+            else:
+                px.append(None); py.append(None)
+        if any(v is not None for v in px):
+            traces.append(go.Scatter(
+                x=px, y=py, mode="lines",
+                line=dict(color="rgba(255,220,80,0.45)", width=1.2, dash="dot"),
+                hoverinfo="skip", showlegend=False,
+            ))
+        # Futur
+        fx, fy = [], []
+        for alt, az in zip(sat["future_alts"], sat["future_azs"]):
+            xy = _project(alt, az, az_center, az_fov, alt_min, alt_max, width, height, clip=False)
+            if xy and alt >= alt_min:
+                fx.append(xy[0]); fy.append(xy[1])
+            else:
+                fx.append(None); fy.append(None)
+        if any(v is not None for v in fx):
+            traces.append(go.Scatter(
+                x=fx, y=fy, mode="lines",
+                line=dict(color="rgba(255,220,80,0.80)", width=1.5),
+                hoverinfo="skip", showlegend=False,
+            ))
+        # Position courante
+        xy = _project(sat["alt"], sat["az"], az_center, az_fov, alt_min, alt_max, width, height)
+        if xy:
+            traces.append(go.Scatter(
+                x=[xy[0]], y=[xy[1]],
+                mode="markers+text",
+                marker=dict(symbol="triangle-up", size=10,
+                            color="#ffdc50", line=dict(color="#000", width=0.6)),
+                text=[sat["name"].split("(")[0].strip()],
+                textposition="top center",
+                textfont=dict(color="#ffdc50", size=9),
+                hovertemplate=(
+                    f"<b>{sat['name']}</b><br>"
+                    f"Alt {sat['alt']:.1f}°  Az {sat['az']:.1f}°<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+    return traces
+
+
 def build_horizon_chart(
     stars_df: pd.DataFrame,
     planets_list: list[dict],
@@ -725,6 +784,7 @@ def build_horizon_chart(
     height: int = 980,
     options: Optional[dict[str, bool]] = None,
     messier_df: Optional[pd.DataFrame] = None,
+    satellites_data: list[dict] | None = None,
 ) -> go.Figure:
     """
     Vue horizon panoramique en projection équirectangulaire.
@@ -790,6 +850,10 @@ def build_horizon_chart(
 
     if opts['show_planets']:
         for tr in _planet_traces(planets_list, az_center, az_fov, alt_min, alt_max, width, height):
+            fig.add_trace(tr)
+
+    if opts.get("show_satellites") and satellites_data:
+        for tr in _satellite_traces_h(satellites_data, az_center, az_fov, alt_min, alt_max, width, height):
             fig.add_trace(tr)
 
     fig.update_layout(

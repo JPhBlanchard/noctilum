@@ -117,6 +117,7 @@ def build_eyepiece_chart(
     messier_df: pd.DataFrame | None = None,
     observer=None,
     t=None,
+    satellites_data: list | None = None,
 ) -> go.Figure:
     opts  = options or {}
     R     = min(width, height) / 2.0 - 50
@@ -372,6 +373,53 @@ def build_eyepiece_chart(
                 visible=True,
                 hoverinfo="skip", showlegend=False,
             ))
+
+    # ── Satellites ───────────────────────────────────────────────────────────
+    if opts.get("show_satellites") and satellites_data:
+        for sat in satellites_data:
+            def _trail_px(alts_list, azs_list):
+                tx, ty = [], []
+                for a, z in zip(alts_list, azs_list):
+                    xn, yn, dn = _gnomonic(np.array([a]), np.array([z]),
+                                           target_alt, target_az, half)
+                    if dn[0] <= 1.8:
+                        tx.append(float(cx + xn[0] * R))
+                        ty.append(float(cy - yn[0] * R))
+                    else:
+                        tx.append(None); ty.append(None)
+                return tx, ty
+
+            px, py = _trail_px(sat["past_alts"], sat["past_azs"])
+            if any(v is not None for v in px):
+                fig.add_trace(go.Scatter(
+                    x=px, y=py, mode="lines",
+                    line=dict(color="rgba(255,220,80,0.40)", width=1.0, dash="dot"),
+                    hoverinfo="skip", showlegend=False,
+                ))
+            fx, fy = _trail_px(sat["future_alts"], sat["future_azs"])
+            if any(v is not None for v in fx):
+                fig.add_trace(go.Scatter(
+                    x=fx, y=fy, mode="lines",
+                    line=dict(color="rgba(255,220,80,0.85)", width=1.5),
+                    hoverinfo="skip", showlegend=False,
+                ))
+            xn, yn, dn = _gnomonic(np.array([sat["alt"]]), np.array([sat["az"]]),
+                                   target_alt, target_az, half)
+            if dn[0] <= 1.0:
+                fig.add_trace(go.Scatter(
+                    x=[float(cx + xn[0] * R)], y=[float(cy - yn[0] * R)],
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=10, color="#ffdc50",
+                                line=dict(color="#000", width=0.6)),
+                    text=[sat["name"].split("(")[0].strip()],
+                    textposition="top center",
+                    textfont=dict(color="#ffdc50", size=9),
+                    hovertemplate=(
+                        f"<b>{sat['name']}</b><br>"
+                        f"Alt {sat['alt']:.1f}°  Az {sat['az']:.1f}°<extra></extra>"
+                    ),
+                    showlegend=False,
+                ))
 
     # ── Réticule ─────────────────────────────────────────────────────────────
     g = R * 0.08

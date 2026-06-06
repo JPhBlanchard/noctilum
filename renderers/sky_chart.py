@@ -570,6 +570,62 @@ def _messier_traces(messier_df: pd.DataFrame, width: int, height: int) -> list[g
     return traces
 
 
+def _satellite_traces(
+    satellites_data: list[dict],
+    width: int,
+    height: int,
+) -> list[go.Scatter]:
+    """Traces satellites : trajectoire passé (tireté) + futur (trait) + point courant."""
+    traces = []
+    for sat in satellites_data:
+        # Trajectoire passée
+        px, py = [], []
+        for alt, az in zip(sat["past_alts"], sat["past_azs"]):
+            xy = altaz_to_xy(alt, az, width, height)
+            if xy:
+                px.append(xy[0]); py.append(xy[1])
+            else:
+                px.append(None); py.append(None)
+        if any(v is not None for v in px):
+            traces.append(go.Scatter(
+                x=px, y=py, mode="lines",
+                line=dict(color="rgba(255,220,80,0.45)", width=1.2, dash="dot"),
+                hoverinfo="skip", showlegend=False,
+            ))
+        # Trajectoire future
+        fx, fy = [], []
+        for alt, az in zip(sat["future_alts"], sat["future_azs"]):
+            xy = altaz_to_xy(alt, az, width, height)
+            if xy:
+                fx.append(xy[0]); fy.append(xy[1])
+            else:
+                fx.append(None); fy.append(None)
+        if any(v is not None for v in fx):
+            traces.append(go.Scatter(
+                x=fx, y=fy, mode="lines",
+                line=dict(color="rgba(255,220,80,0.80)", width=1.5),
+                hoverinfo="skip", showlegend=False,
+            ))
+        # Position courante
+        xy = altaz_to_xy(sat["alt"], sat["az"], width, height)
+        if xy:
+            traces.append(go.Scatter(
+                x=[xy[0]], y=[xy[1]],
+                mode="markers+text",
+                marker=dict(symbol="triangle-up", size=10,
+                            color="#ffdc50", line=dict(color="#000", width=0.6)),
+                text=[sat["name"].split("(")[0].strip()],
+                textposition="top center",
+                textfont=dict(color="#ffdc50", size=9),
+                hovertemplate=(
+                    f"<b>{sat['name']}</b><br>"
+                    f"Alt {sat['alt']:.1f}°  Az {sat['az']:.1f}°<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+    return traces
+
+
 def build_sky_chart(
     stars_df: pd.DataFrame,
     planets_list: list[dict],
@@ -579,6 +635,7 @@ def build_sky_chart(
     height: int = 800,
     options: Optional[dict[str, bool]] = None,
     messier_df: Optional[pd.DataFrame] = None,
+    satellites_data: list[dict] | None = None,
 ) -> go.Figure:
     """
     Construit et retourne la carte du ciel interactive (go.Figure Plotly).
@@ -656,6 +713,11 @@ def build_sky_chart(
     # Planètes
     if opts["show_planets"]:
         for trace in _planet_traces(planets_list, width, height):
+            fig.add_trace(trace)
+
+    # Satellites
+    if opts.get("show_satellites") and satellites_data:
+        for trace in _satellite_traces(satellites_data, width, height):
             fig.add_trace(trace)
 
     fig.update_layout(
