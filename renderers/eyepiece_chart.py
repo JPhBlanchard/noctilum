@@ -11,11 +11,25 @@ Convention écran :
 
 from __future__ import annotations
 
+import base64
+import math as _math
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime, timezone
 
 _BG = "#000000"
+
+_PLANET_COLOR = {
+    'Mercure': '#b8a898',
+    'Vénus':   '#e8c87a',
+    'Mars':    '#c1440e',
+    'Jupiter': '#c88b3a',
+    'Saturne': '#e8d5a0',
+    'Uranus':  '#7de8d8',
+    'Neptune': '#4b70dd',
+    'Pluton':  '#b8956a',
+}
 
 
 # ── Projection gnomique ───────────────────────────────────────────────────────
@@ -131,8 +145,8 @@ def build_eyepiece_chart(
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
         margin=dict(l=40, r=40, t=50, b=40),
-        xaxis=dict(visible=False, range=[0, width],  fixedrange=True),
-        yaxis=dict(visible=False, range=[0, height], scaleanchor="x", fixedrange=True),
+        xaxis=dict(visible=False, range=[0, width],  fixedrange=False),
+        yaxis=dict(visible=False, range=[0, height], scaleanchor="x", fixedrange=False),
         showlegend=False,
     )
 
@@ -280,17 +294,10 @@ def build_eyepiece_chart(
             ))
 
     # ── Planètes ──────────────────────────────────────────────────────────────
+    _moon_ep: dict | None = None   # infos Lune pour le layout image
+    _sun_ep:  dict | None = None   # infos Soleil pour le layout image
     if opts.get("show_planets", True) and planets_data:
-        _PLANET_COLOR = {
-            "Soleil": "#ffffaa", "Lune": "#ddddcc",
-            "Mercure": "#bbbbbb", "Vénus": "#ffffdd",
-            "Mars": "#ff6644", "Jupiter": "#ffddaa",
-            "Saturne": "#eecc88", "Uranus": "#aaddee",
-            "Neptune": "#aabbff",
-        }
-        for p in planets_data:
-            if not p.get("above_horizon", True):
-                continue
+        for p in sorted(planets_data, key=lambda b: b.get('distance_au') or 0, reverse=True):
             p_alt, p_az = float(p["alt"]), float(p["az"])
             xn, yn, dn = _gnomonic(
                 np.array([p_alt]), np.array([p_az]),
@@ -300,25 +307,173 @@ def build_eyepiece_chart(
                 continue
             xpp = float(cx + xn[0] * R)
             ypp = float(cy - yn[0] * R)
-            col = _PLANET_COLOR.get(p["name"], "#ffcc88")
             mag = p.get("magnitude")
+
+            if p["name"] == "Lune":
+                # Taille proportionnelle au diamètre apparent dans ce FOV
+                # R pixels = half degrés → taille réelle = R * diam_deg / half
+                diam_arcsec = p.get("ang_diam_arcsec") or 1842.0
+                diam_deg    = diam_arcsec / 3600.0
+                moon_px     = max(8, min(int(1.9 * R), int(R * diam_deg / half)))
+                _moon_ep    = {"xpp": xpp, "ypp": ypp, "moon_px": moon_px, "p": p}
+                # Marqueur invisible — sert de zone de capture hover
+                fig.add_trace(go.Scatter(
+                    x=[xpp], y=[ypp],
+                    mode="markers",
+                    marker=dict(symbol="circle", size=moon_px,
+                                color="rgba(0,0,0,0)", opacity=0),
+                    hovertemplate=(
+                        "<b>Lune</b><br>"
+                        f"Alt {p_alt:.1f}°  Az {p_az:.1f}°"
+                        + (f"<br>Mag {mag:.1f}" if mag is not None else "")
+                        + "<extra></extra>"
+                    ),
+                    showlegend=False,
+                ))
+                continue
+
+            if p["name"] == "Soleil":
+                diam_arcsec = p.get("ang_diam_arcsec") or 1919.0
+                diam_deg    = diam_arcsec / 3600.0
+                sun_px      = max(8, min(int(1.9 * R), int(R * diam_deg / half)))
+                _sun_ep     = {"xpp": xpp, "ypp": ypp, "sun_px": sun_px}
+                fig.add_trace(go.Scatter(
+                    x=[xpp], y=[ypp],
+                    mode="markers",
+                    marker=dict(symbol="circle", size=sun_px,
+                                color="rgba(0,0,0,0)", opacity=0),
+                    hovertemplate=(
+                        "<b>Soleil</b><br>"
+                        f"Alt {p_alt:.1f}°  Az {p_az:.1f}°"
+                        + (f"<br>Mag {mag:.1f}" if mag is not None else "")
+                        + "<extra></extra>"
+                    ),
+                    showlegend=False,
+                ))
+                continue
+
+            col = _PLANET_COLOR.get(p["name"], "#ffcc88")
             sz  = float(np.clip(10.0 - (mag or 0) * 0.8, 6.0, 18.0))
+            ring_P = p.get("ring_P_deg")
+            ring_B = p.get("ring_B_deg")
+            ring_q = float(p.get("parallactic_angle_deg") or 0.0)
+
+            if p["name"] == "Saturne" and ring_P is not None and ring_B is not None:
+                # Vue oculaire : haut = altitude, référence = zénith → correction par q
+                ring_pa_rad = _math.radians(float(ring_P) - ring_q + 90.0)
+                semi_major = 12.0
+                semi_minor = max(1.0, semi_major * abs(_math.sin(_math.radians(float(ring_B)))))
+                maj_dx =  _math.sin(ring_pa_rad)
+                maj_dy = -_math.cos(ring_pa_rad)
+                min_dx =  _math.cos(ring_pa_rad)
+                min_dy =  _math.sin(ring_pa_rad)
+
+                def _ep_arc(t0, t1):
+                    n = 36
+                    xs2, ys2 = [], []
+                    for i in range(n + 1):
+                        θ = t0 + (t1 - t0) * i / n
+                        xs2.append(xpp + semi_major * _math.cos(θ) * maj_dx + semi_minor * _math.sin(θ) * min_dx)
+                        ys2.append(ypp + semi_major * _math.cos(θ) * maj_dy + semi_minor * _math.sin(θ) * min_dy)
+                    return xs2, ys2
+
+                if float(ring_B) >= 0:
+                    bx, by = _ep_arc(_math.pi, 2 * _math.pi)
+                    fx, fy = _ep_arc(0.0, _math.pi)
+                else:
+                    bx, by = _ep_arc(0.0, _math.pi)
+                    fx, fy = _ep_arc(_math.pi, 2 * _math.pi)
+
+                fig.add_trace(go.Scatter(
+                    x=bx, y=by, mode="lines",
+                    line=dict(color="rgba(200,170,106,0.35)", width=1.2),
+                    hoverinfo="skip", showlegend=False,
+                ))
+
+            # Disque planète en coordonnées data → zoome avec la roulette
+            r_disk = sz / 2.0
+            _n = 36
+            _disk_xs = [xpp + r_disk * _math.cos(2 * _math.pi * i / _n) for i in range(_n + 1)]
+            _disk_ys = [ypp + r_disk * _math.sin(2 * _math.pi * i / _n) for i in range(_n + 1)]
+            _htmpl = (
+                f"<b>{p['name']}</b><br>"
+                f"Alt {p_alt:.1f}°  Az {p_az:.1f}°"
+                + (f"<br>Mag {mag:.1f}" if mag is not None else "")
+                + "<extra></extra>"
+            )
+            fig.add_trace(go.Scatter(
+                x=_disk_xs, y=_disk_ys,
+                mode="lines",
+                fill="toself",
+                fillcolor=col,
+                line=dict(color="rgba(255,255,255,0.27)", width=0.8),
+                name=p["name"],
+                hovertemplate=_htmpl,
+                showlegend=False,
+            ))
+            # Label texte (position fixe au-dessus du disque)
             fig.add_trace(go.Scatter(
                 x=[xpp], y=[ypp],
-                mode="markers+text",
-                marker=dict(symbol="circle", size=sz, color=col,
-                            line=dict(color="rgba(255,255,255,0.27)", width=0.8)),
+                mode="text",
                 text=[p["name"]],
                 textposition="top center",
                 textfont=dict(color=col, size=10),
-                hovertemplate=(
-                    f"<b>{p['name']}</b><br>"
-                    f"Alt {p_alt:.1f}°  Az {p_az:.1f}°"
-                    + (f"<br>Mag {mag:.1f}" if mag is not None else "")
-                    + "<extra></extra>"
-                ),
+                hoverinfo="skip",
                 showlegend=False,
             ))
+
+            if p["name"] == "Saturne" and ring_P is not None and ring_B is not None:
+                fig.add_trace(go.Scatter(
+                    x=fx, y=fy, mode="lines",
+                    line=dict(color="rgba(200,170,106,0.85)", width=1.5),
+                    hoverinfo="skip", showlegend=False,
+                ))
+
+    # ── Images Soleil + Lune (une seule mise à jour layout) ──────────────────
+    _ep_images = []
+
+    if _sun_ep is not None:
+        from engines.sun_engine import render_sun_image
+        sun_px   = _sun_ep["sun_px"]
+        render_s = max(64, min(320, sun_px))
+        png = render_sun_image(size=render_s)
+        b64 = base64.b64encode(png).decode()
+        _ep_images.append(dict(
+            source=f"data:image/png;base64,{b64}",
+            x=_sun_ep["xpp"], y=_sun_ep["ypp"],
+            sizex=sun_px, sizey=sun_px,
+            xanchor="center", yanchor="middle",
+            xref="x", yref="y",
+            layer="above",
+        ))
+
+    if _moon_ep is not None and observer is not None:
+        from engines.moon_engine import render_moon_image
+        xpp     = _moon_ep["xpp"]
+        ypp     = _moon_ep["ypp"]
+        moon_px = _moon_ep["moon_px"]
+        t_dt    = t if isinstance(t, datetime) else (t.utc_datetime() if t is not None else datetime.now(timezone.utc))
+        render_s = max(64, min(320, moon_px))
+        png = render_moon_image(
+            t_dt=t_dt,
+            observer_lat=observer.lat,
+            observer_lon=observer.lon,
+            size=render_s,
+            flip=False,
+            rotation_deg=None,
+        )
+        b64 = base64.b64encode(png).decode()
+        _ep_images.append(dict(
+            source=f"data:image/png;base64,{b64}",
+            x=xpp, y=ypp,
+            sizex=moon_px, sizey=moon_px,
+            xanchor="center", yanchor="middle",
+            xref="x", yref="y",
+            layer="above",
+        ))
+
+    if _ep_images:
+        fig.update_layout(images=_ep_images)
 
     # ── Noms de constellations ────────────────────────────────────────────────
     if opts.get("show_const_names", False) and observer is not None:
@@ -450,10 +605,52 @@ def build_eyepiece_chart(
         showlegend=False,
     ))
 
+    # ── Indicateur Nord céleste (corrigé de l'angle parallactique) ───────────
+    # Le Pôle Nord Céleste est à alt = lat, az = 0° (quelle que soit l'heure).
+    # Sa projection gnomique depuis le centre du champ donne la vraie direction N,
+    # qui diffère du zénith ("haut") selon l'angle parallactique.
+    if observer is not None:
+        _ncp_alt = float(observer.lat)
+        _ncp_az  = 0.0
+        _xn_ncp, _yn_ncp, _dn_ncp = _gnomonic(
+            np.array([_ncp_alt]), np.array([_ncp_az]),
+            target_alt, target_az, half,
+        )
+        _dnp = float(_math.sqrt(_xn_ncp[0] ** 2 + _yn_ncp[0] ** 2))
+        if _dnp > 1e-4:                      # éviter la singularité si on pointe le pôle
+            _ndx = float(_xn_ncp[0]) / _dnp  # vecteur unitaire → Nord céleste
+            _ndy = float(_yn_ncp[0]) / _dnp
+
+            # Tick de 12 % de R rentrant depuis le bord du cercle-champ
+            _r0 = R * 1.00
+            _r1 = R * 0.88
+            fig.add_trace(go.Scatter(
+                x=[cx + _ndx * _r0, cx + _ndx * _r1],
+                y=[cy - _ndy * _r0, cy - _ndy * _r1],
+                mode="lines",
+                line=dict(color="#5577dd", width=2.2),
+                hoverinfo="skip", showlegend=False,
+            ))
+            # Tick opposé (Sud)
+            fig.add_trace(go.Scatter(
+                x=[cx - _ndx * _r0, cx - _ndx * _r1],
+                y=[cy + _ndy * _r0, cy + _ndy * _r1],
+                mode="lines",
+                line=dict(color="#334466", width=1.2),
+                hoverinfo="skip", showlegend=False,
+            ))
+            # Label "N☆"
+            fig.add_annotation(
+                x=cx + _ndx * (R * 1.16), y=cy - _ndy * (R * 1.16),
+                text="<b>N☆</b>", showarrow=False,
+                font=dict(color="#5577dd", size=10),
+                xanchor="center", yanchor="middle",
+            )
+
     # ── Annotations ───────────────────────────────────────────────────────────
     lc = dict(color="#334466", size=10)
     fig.add_annotation(x=cx, y=cy + R + 8,
-                       text="↑ N (alt +)", showarrow=False,
+                       text="↑ Zénith", showarrow=False,
                        font=lc, yanchor="bottom")
     fig.add_annotation(x=cx - R - 8, y=cy,
                        text="az −", showarrow=False,

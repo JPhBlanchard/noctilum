@@ -5,8 +5,9 @@ X = azimut, Y = altitude. Horizon en bas, zénith en haut.
 
 from __future__ import annotations
 
+import base64
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -26,7 +27,16 @@ _HORIZON_CLR      = '#445566'
 _GRID_LINE_CLR    = 'rgba(55, 75, 105, 0.40)'
 _GRID_LABEL_CLR   = '#445566'
 _CARDINAL_CLR     = '#8899aa'
-_PLANET_CLR       = '#FFD700'
+_PLANET_COLOR = {
+    'Mercure': '#b8a898',
+    'Vénus':   '#e8c87a',
+    'Mars':    '#c1440e',
+    'Jupiter': '#c88b3a',
+    'Saturne': '#e8d5a0',
+    'Uranus':  '#7de8d8',
+    'Neptune': '#4b70dd',
+    'Pluton':  '#b8956a',
+}
 _SUN_CLR          = '#FFF5A0'
 _MOON_CLR         = '#E8E8D0'
 _LABEL_CLR        = '#FFFFFF'
@@ -36,7 +46,7 @@ _ECLIPTIC_COLOR    = 'rgba(255, 210, 60, 0.55)'
 _GRID_COLOR        = 'rgba(80, 120, 200, 0.55)'
 
 _PLANET_NAMES = frozenset(
-    {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune'}
+    {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune', 'Pluton'}
 )
 
 _CARDINAL_MAP = {
@@ -238,6 +248,7 @@ def _stars_trace(
     height: int,
 ) -> Optional[go.Scatter]:
     xs, ys, colors, sizes, custom = [], [], [], [], []
+    _has_sptype = 'spectral_type' in stars_df.columns
 
     for _, row in stars_df.iterrows():
         alt, az = float(row['alt_deg']), float(row['az_deg'])
@@ -247,7 +258,7 @@ def _stars_trace(
         opacity = magnitude_to_opacity(float(row['magnitude']))
         xs.append(xy[0])
         ys.append(xy[1])
-        colors.append(_rgba(spectral_color(str(row['spectral_type'])), opacity))
+        colors.append(_rgba(spectral_color(str(row['spectral_type']) if _has_sptype else ''), opacity))
         sizes.append(magnitude_to_size(float(row['magnitude'])))
         custom.append((row['name'], float(row['magnitude']), alt, az))
 
@@ -356,6 +367,49 @@ def _constellation_labels_trace(
         return None
 
 
+def _saturn_ring_traces_h(
+    x: float, y: float, ring_P: float, ring_B: float, parallactic_q: float,
+) -> tuple[go.Scatter, go.Scatter]:
+    """Deux demi-arcs d'anneaux de Saturne pour la vue horizon."""
+    # Dans la vue horizon (haut=altitude), l'axe de ref est le zénith → correction par q
+    ring_pa_rad = math.radians(ring_P - parallactic_q + 90.0)
+    semi_major = 12.0
+    semi_minor = max(1.0, semi_major * abs(math.sin(math.radians(ring_B))))
+
+    maj_dx =  math.sin(ring_pa_rad)
+    maj_dy = -math.cos(ring_pa_rad)
+    min_dx =  math.cos(ring_pa_rad)
+    min_dy =  math.sin(ring_pa_rad)
+
+    def arc(t0: float, t1: float) -> tuple[list, list]:
+        n = 36
+        xs, ys = [], []
+        for i in range(n + 1):
+            θ = t0 + (t1 - t0) * i / n
+            xs.append(x + semi_major * math.cos(θ) * maj_dx + semi_minor * math.sin(θ) * min_dx)
+            ys.append(y + semi_major * math.cos(θ) * maj_dy + semi_minor * math.sin(θ) * min_dy)
+        return xs, ys
+
+    if ring_B >= 0:
+        back_xs,  back_ys  = arc(math.pi, 2 * math.pi)
+        front_xs, front_ys = arc(0.0, math.pi)
+    else:
+        back_xs,  back_ys  = arc(0.0, math.pi)
+        front_xs, front_ys = arc(math.pi, 2 * math.pi)
+
+    back = go.Scatter(
+        x=back_xs, y=back_ys, mode='lines',
+        line=dict(color='rgba(200,170,106,0.35)', width=1.2),
+        hoverinfo='skip', showlegend=False,
+    )
+    front = go.Scatter(
+        x=front_xs, y=front_ys, mode='lines',
+        line=dict(color='rgba(200,170,106,0.85)', width=1.5),
+        hoverinfo='skip', showlegend=False,
+    )
+    return back, front
+
+
 def _planet_traces(
     planets_list: list[dict],
     az_center: float,
@@ -367,7 +421,8 @@ def _planet_traces(
 ) -> list[go.Scatter]:
     traces = []
 
-    for body in planets_list:
+    sorted_planets = sorted(planets_list, key=lambda b: b.get('distance_au') or 0, reverse=True)
+    for body in sorted_planets:
         if not body.get('above_horizon'):
             continue
         alt, az = float(body['alt']), float(body['az'])
@@ -388,30 +443,50 @@ def _planet_traces(
         if name == 'Soleil':
             traces.append(go.Scatter(
                 x=[x], y=[y],
-                mode='markers+text',
-                marker=dict(symbol='circle', size=24, color='rgba(0,0,0,0)', opacity=0),
-                text=['☀'],
-                textfont=dict(color=_SUN_CLR, size=24),
-                textposition='middle center',
+                mode='markers',
+                marker=dict(symbol='circle', size=30,
+                            color='rgba(0,0,0,0)', opacity=0),
                 name=name, hovertemplate=tmpl, showlegend=False,
             ))
         elif name == 'Lune':
+            # Marqueur invisible pour hover — l'image est ajoutée en layout_image
             traces.append(go.Scatter(
                 x=[x], y=[y],
-                mode='markers+text',
-                marker=dict(symbol='circle', size=20, color='rgba(0,0,0,0)', opacity=0),
-                text=['●'],
-                textfont=dict(color=_MOON_CLR, size=20),
-                textposition='middle center',
+                mode='markers',
+                marker=dict(symbol='circle', size=26, color='rgba(0,0,0,0)', opacity=0),
                 name=name, hovertemplate=tmpl, showlegend=False,
             ))
+        elif name == 'Saturne':
+            size = int(max(6, min(10, round(9.0 - (mag if mag is not None else 2.0) * 0.5))))
+            ring_P = body.get('ring_P_deg')
+            ring_B = body.get('ring_B_deg')
+            ring_q = body.get('parallactic_angle_deg') or 0.0
+            sat_trace = go.Scatter(
+                x=[x], y=[y],
+                mode='markers+text',
+                marker=dict(
+                    symbol='circle-cross', size=size, color=_PLANET_COLOR.get(name, '#e8c87a'),
+                    line=dict(color='rgba(255,255,255,0.35)', width=1),
+                ),
+                text=[name],
+                textfont=dict(color=_LABEL_CLR, size=9),
+                textposition='top center',
+                name=name, hovertemplate=tmpl, showlegend=False,
+            )
+            if ring_P is not None and ring_B is not None:
+                back, front = _saturn_ring_traces_h(x, y, ring_P, ring_B, ring_q)
+                traces.append(back)
+                traces.append(sat_trace)
+                traces.append(front)
+            else:
+                traces.append(sat_trace)
         elif name in _PLANET_NAMES:
-            size = 16 if (mag is not None and mag < 0) else 12
+            size = int(max(6, min(10, round(9.0 - (mag if mag is not None else 2.0) * 0.5))))
             traces.append(go.Scatter(
                 x=[x], y=[y],
                 mode='markers+text',
                 marker=dict(
-                    symbol='circle-cross', size=size, color=_PLANET_CLR,
+                    symbol='circle-cross', size=size, color=_PLANET_COLOR.get(name, '#e8c87a'),
                     line=dict(color='rgba(255,255,255,0.35)', width=1),
                 ),
                 text=[name],
@@ -771,6 +846,105 @@ def _satellite_traces_h(
     return traces
 
 
+def _sun_layout_image_h(
+    planets_list: list[dict],
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+    width: int,
+    height: int,
+) -> Optional[dict]:
+    """Image Soleil photographique pour la vue paysage."""
+    from engines.sun_engine import render_sun_image
+
+    sun = next(
+        (b for b in planets_list if b['name'] == 'Soleil' and b.get('above_horizon')),
+        None,
+    )
+    if sun is None:
+        return None
+
+    xy = _project(float(sun['alt']), float(sun['az']),
+                  az_center, az_fov, alt_min, alt_max, width, height)
+    if xy is None:
+        return None
+    x_s, y_s = xy
+
+    diam_arcsec = sun.get('ang_diam_arcsec') or 1919.0
+    diam_deg    = diam_arcsec / 3600.0
+    scale       = ((width / az_fov) + (height / (alt_max - alt_min))) / 2.0
+    display_px  = max(12, min(20, int(scale * diam_deg * 4)))
+
+    png = render_sun_image(size=64)
+    b64 = base64.b64encode(png).decode()
+
+    return dict(
+        source=f'data:image/png;base64,{b64}',
+        x=x_s, y=y_s,
+        sizex=display_px, sizey=display_px,
+        xanchor='center', yanchor='middle',
+        xref='x', yref='y',
+        layer='above',
+    )
+
+
+def _moon_layout_image_h(
+    planets_list: list[dict],
+    observer: Observer,
+    t: Optional[datetime],
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+    width: int,
+    height: int,
+) -> Optional[dict]:
+    """Image Lune photographique orientée pour la vue paysage."""
+    from engines.moon_engine import render_moon_image
+
+    moon = next(
+        (b for b in planets_list if b['name'] == 'Lune' and b.get('above_horizon')),
+        None,
+    )
+    if moon is None:
+        return None
+
+    alt = float(moon['alt'])
+    az  = float(moon['az'])
+    xy  = _project(alt, az, az_center, az_fov, alt_min, alt_max, width, height)
+    if xy is None:
+        return None
+    x_m, y_m = xy
+
+    # Taille proportionnelle au diamètre apparent (× 4 pour la lisibilité, min 12, max 20)
+    diam_arcsec = moon.get('ang_diam_arcsec') or 1842.0
+    diam_deg    = diam_arcsec / 3600.0
+    scale       = ((width / az_fov) + (height / (alt_max - alt_min))) / 2.0
+    display_px  = max(12, min(20, int(scale * diam_deg * 4)))
+
+    # flip=True : Est à gauche (convention œil nu) ; angle parallactique auto
+    t_dt = t or datetime.now(timezone.utc)
+    png  = render_moon_image(
+        t_dt=t_dt,
+        observer_lat=observer.lat,
+        observer_lon=observer.lon,
+        size=64,
+        flip=True,
+        rotation_deg=None,
+    )
+    b64 = base64.b64encode(png).decode()
+
+    return dict(
+        source=f'data:image/png;base64,{b64}',
+        x=x_m, y=y_m,
+        sizex=display_px, sizey=display_px,
+        xanchor='center', yanchor='middle',
+        xref='x', yref='y',
+        layer='above',
+    )
+
+
 def build_horizon_chart(
     stars_df: pd.DataFrame,
     planets_list: list[dict],
@@ -851,6 +1025,17 @@ def build_horizon_chart(
     if opts['show_planets']:
         for tr in _planet_traces(planets_list, az_center, az_fov, alt_min, alt_max, width, height):
             fig.add_trace(tr)
+        _imgs = []
+        sun_img = _sun_layout_image_h(
+            planets_list, az_center, az_fov, alt_min, alt_max, width, height)
+        if sun_img is not None:
+            _imgs.append(sun_img)
+        moon_img = _moon_layout_image_h(
+            planets_list, observer, t, az_center, az_fov, alt_min, alt_max, width, height)
+        if moon_img is not None:
+            _imgs.append(moon_img)
+        if _imgs:
+            fig.update_layout(images=_imgs)
 
     if opts.get("show_satellites") and satellites_data:
         for tr in _satellite_traces_h(satellites_data, az_center, az_fov, alt_min, alt_max, width, height):

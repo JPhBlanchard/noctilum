@@ -6,8 +6,9 @@ Point d'entrée unique : build_sky_chart().
 
 from __future__ import annotations
 
+import base64
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -31,7 +32,16 @@ _BG_SKY        = '#050510'   # fond du disque céleste
 _HORIZON_LINE  = '#445566'   # cercle horizon
 _PARALLEL_LINE = '#333355'   # cercles de parallèles (pointillés)
 _CARDINAL_CLR  = '#8899aa'   # texte cardinaux
-_PLANET_CLR    = '#FFD700'   # planètes
+_PLANET_COLOR = {
+    'Mercure': '#b8a898',   # gris-brun (surface rocheuse)
+    'Vénus':   '#e8c87a',   # jaune-doré (nuages H₂SO₄)
+    'Mars':    '#c1440e',   # rouge-brun (oxyde de fer)
+    'Jupiter': '#c88b3a',   # ocre-orangé (bandes nuageuses)
+    'Saturne': '#e8d5a0',   # or pâle (anneaux glacés)
+    'Uranus':  '#7de8d8',   # cyan-vert (méthane)
+    'Neptune': '#4b70dd',   # bleu profond (méthane)
+    'Pluton':  '#b8956a',   # brun-rougeâtre (tholine)
+}
 _SUN_CLR       = '#FFF5A0'   # Soleil
 _MOON_CLR      = '#E8E8D0'   # Lune
 _LABEL_CLR     = '#FFFFFF'   # labels planètes
@@ -49,7 +59,7 @@ _CARDINALS = (
 )
 
 _PLANET_NAMES = frozenset(
-    {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune'}
+    {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune', 'Pluton'}
 )
 
 _CONST_LINE_COLOR  = 'rgba(80, 100, 180, 0.35)'
@@ -277,33 +287,41 @@ def _grid_trace(
 # ---------------------------------------------------------------------------
 
 def _stars_trace(stars_df: pd.DataFrame, width: int, height: int) -> go.Scatter:
-    xs, ys, colors, sizes = [], [], [], []
-    custom: list[tuple] = []
+    import numpy as np
 
-    for _, row in stars_df.iterrows():
-        xy = altaz_to_xy(float(row['alt_deg']), float(row['az_deg']), width, height)
-        if xy is None:
-            continue
-        x, y = xy
-        opacity   = magnitude_to_opacity(float(row['magnitude']))
-        color_hex = spectral_color(str(row['spectral_type']))
+    alt  = stars_df['alt_deg'].to_numpy(dtype=float)
+    az   = stars_df['az_deg'].to_numpy(dtype=float)
+    mag  = stars_df['magnitude'].to_numpy(dtype=float)
+    names = stars_df['name'].to_numpy(dtype=str)
 
-        xs.append(x)
-        ys.append(y)
-        colors.append(_rgba(color_hex, opacity))
-        sizes.append(magnitude_to_size(float(row['magnitude'])))
-        custom.append((
-            row['name'],
-            float(row['magnitude']),
-            float(row['alt_deg']),
-            float(row['az_deg']),
-        ))
+    # Projection stéréographique vectorisée (les étoiles sont déjà alt > 0)
+    from engines.projection import _MARGIN
+    R      = min(width, height) / 2.0 - _MARGIN
+    cx, cy = width / 2.0, height / 2.0
+    r      = R * np.tan(np.radians(90.0 - alt) / 2.0)
+    xs     = (cx + r * np.sin(np.radians(az))).tolist()
+    ys     = (cy - r * np.cos(np.radians(az))).tolist()
+
+    # Taille : mag ∈ [−2, 5] → px ∈ [8, 1.5]
+    sizes = np.clip(8.0 + (mag + 2.0) * (1.5 - 8.0) / 7.0, 1.5, 8.0).tolist()
+
+    # Opacité : mag ∈ [1, 4] → [1.0, 0.5]
+    opacities = np.clip(1.0 + (mag - 1.0) * (0.5 - 1.0) / 3.0, 0.5, 1.0)
+
+    # Couleurs spectrales (vectorisé pour BSC5, gris uniforme pour Hipparcos)
+    if 'spectral_type' in stars_df.columns:
+        sptypes = stars_df['spectral_type'].to_numpy(dtype=str)
+        colors = [_rgba(spectral_color(sp), op) for sp, op in zip(sptypes, opacities)]
+    else:
+        colors = [_rgba('#CCCCCC', op) for op in opacities]
+
+    customdata = list(zip(names, mag.tolist(), alt.tolist(), az.tolist()))
 
     return go.Scatter(
         x=xs, y=ys,
         mode='markers',
         marker=dict(color=colors, size=sizes, line=dict(width=0)),
-        customdata=custom,
+        customdata=customdata,
         hovertemplate=(
             '<b>%{customdata[0]}</b><br>'
             'Mag : %{customdata[1]:.1f}<br>'
@@ -363,14 +381,14 @@ def _planet_marker_trace(
 ) -> go.Scatter:
     """Trace pour une planète classique : cercle-croix doré + label direct."""
     mag_str = f'{mag:.1f}' if mag is not None else '—'
-    size = 16 if (mag is not None and mag < 0) else 12
+    size = int(max(6, min(10, round(9.0 - (mag if mag is not None else 2.0) * 0.5))))
     return go.Scatter(
         x=[x], y=[y],
         mode='markers+text',
         marker=dict(
             symbol='circle-cross',
             size=size,
-            color=_PLANET_CLR,
+            color=_PLANET_COLOR.get(name, '#e8c87a'),
             line=dict(color='rgba(255,255,255,0.35)', width=1),
         ),
         text=[name],
@@ -387,10 +405,58 @@ def _planet_marker_trace(
     )
 
 
+def _saturn_ring_traces(
+    x: float, y: float, ring_P: float, ring_B: float,
+) -> tuple[go.Scatter, go.Scatter]:
+    """Deux demi-arcs d'anneaux de Saturne (fond + face) autour du marqueur."""
+    # PA de l'axe majeur = pôle + 90° (anneau ⊥ au pôle)
+    # Dans la carte (N=haut, E=droite), PA se mesure de N vers E CW.
+    ring_pa_rad = math.radians(ring_P + 90.0)
+    semi_major = 12.0   # px symbolique (A-ring outer)
+    semi_minor = max(1.0, semi_major * abs(math.sin(math.radians(ring_B))))
+
+    # Vecteurs axes en coordonnées data (y décroît vers le haut)
+    maj_dx =  math.sin(ring_pa_rad)
+    maj_dy = -math.cos(ring_pa_rad)
+    min_dx =  math.cos(ring_pa_rad)
+    min_dy =  math.sin(ring_pa_rad)
+
+    def arc(t0: float, t1: float) -> tuple[list, list]:
+        n = 36
+        xs, ys = [], []
+        for i in range(n + 1):
+            θ = t0 + (t1 - t0) * i / n
+            xs.append(x + semi_major * math.cos(θ) * maj_dx + semi_minor * math.sin(θ) * min_dx)
+            ys.append(y + semi_major * math.cos(θ) * maj_dy + semi_minor * math.sin(θ) * min_dy)
+        return xs, ys
+
+    # B > 0 → pôle N vers observateur → arc +minor (sin θ > 0) = face avant
+    if ring_B >= 0:
+        back_xs,  back_ys  = arc(math.pi, 2 * math.pi)
+        front_xs, front_ys = arc(0.0, math.pi)
+    else:
+        back_xs,  back_ys  = arc(0.0, math.pi)
+        front_xs, front_ys = arc(math.pi, 2 * math.pi)
+
+    back = go.Scatter(
+        x=back_xs, y=back_ys, mode='lines',
+        line=dict(color='rgba(200,170,106,0.35)', width=1.2),
+        hoverinfo='skip', showlegend=False,
+    )
+    front = go.Scatter(
+        x=front_xs, y=front_ys, mode='lines',
+        line=dict(color='rgba(200,170,106,0.85)', width=1.5),
+        hoverinfo='skip', showlegend=False,
+    )
+    return back, front
+
+
 def _planet_traces(planets_list: list[dict], width: int, height: int) -> list[go.Scatter]:
     traces: list[go.Scatter] = []
 
-    for body in planets_list:
+    # Farthest first → closer objects rendered on top (correct z-order)
+    sorted_planets = sorted(planets_list, key=lambda b: b.get('distance_au') or 0, reverse=True)
+    for body in sorted_planets:
         if not body.get('above_horizon'):
             continue
         xy = altaz_to_xy(float(body['alt']), float(body['az']), width, height)
@@ -403,11 +469,48 @@ def _planet_traces(planets_list: list[dict], width: int, height: int) -> list[go
         mag   = body.get('magnitude')
 
         if name == 'Soleil':
-            traces.append(_unicode_body_trace(
-                x, y, '☀', _SUN_CLR, 24, name, alt, az, mag))
+            mag_str = f'{mag:.1f}' if mag is not None else '—'
+            traces.append(go.Scatter(
+                x=[x], y=[y],
+                mode='markers',
+                marker=dict(symbol='circle', size=30,
+                            color='rgba(0,0,0,0)', opacity=0),
+                name='Soleil',
+                hovertemplate=(
+                    '<b>Soleil</b><br>'
+                    f'Mag : {mag_str}<br>'
+                    f'Alt : {alt:.1f}°  Az : {az:.1f}°'
+                    '<extra></extra>'
+                ),
+                showlegend=False,
+            ))
         elif name == 'Lune':
-            traces.append(_unicode_body_trace(
-                x, y, '●', _MOON_CLR, 20, name, alt, az, mag))
+            # Marqueur invisible pour hover — l'image est ajoutée en layout_image
+            mag_str = f'{mag:.1f}' if mag is not None else '—'
+            traces.append(go.Scatter(
+                x=[x], y=[y],
+                mode='markers',
+                marker=dict(symbol='circle', size=34,
+                            color='rgba(0,0,0,0)', opacity=0),
+                name='Lune',
+                hovertemplate=(
+                    '<b>Lune</b><br>'
+                    f'Mag : {mag_str}<br>'
+                    f'Alt : {alt:.1f}°  Az : {az:.1f}°'
+                    '<extra></extra>'
+                ),
+                showlegend=False,
+            ))
+        elif name == 'Saturne':
+            ring_P = body.get('ring_P_deg')
+            ring_B = body.get('ring_B_deg')
+            if ring_P is not None and ring_B is not None:
+                back, front = _saturn_ring_traces(x, y, ring_P, ring_B)
+                traces.append(back)
+                traces.append(_planet_marker_trace(x, y, name, alt, az, mag))
+                traces.append(front)
+            else:
+                traces.append(_planet_marker_trace(x, y, name, alt, az, mag))
         elif name in _PLANET_NAMES:
             traces.append(_planet_marker_trace(x, y, name, alt, az, mag))
 
@@ -626,6 +729,110 @@ def _satellite_traces(
     return traces
 
 
+def _sun_layout_image(
+    planets_list: list[dict],
+    width: int,
+    height: int,
+) -> Optional[dict]:
+    """Image Soleil photographique pour le layout Plotly (vue zénith)."""
+    from engines.sun_engine import render_sun_image
+
+    sun = next(
+        (b for b in planets_list if b['name'] == 'Soleil' and b.get('above_horizon')),
+        None,
+    )
+    if sun is None:
+        return None
+
+    alt = float(sun['alt'])
+    xy = altaz_to_xy(alt, float(sun['az']), width, height)
+    if xy is None:
+        return None
+    x_s, y_s = xy
+
+    cx, cy  = width / 2.0, height / 2.0
+    chart_r = _effective_radius(width, height)
+
+    diam_arcsec = sun.get('ang_diam_arcsec') or 1919.0
+    diam_deg    = diam_arcsec / 3600.0
+    display_px  = max(12, min(20, int(chart_r / 90.0 * diam_deg * 8)))
+
+    if math.sqrt((x_s - cx) ** 2 + (y_s - cy) ** 2) > chart_r:
+        return None
+
+    png = render_sun_image(size=64)
+    b64 = base64.b64encode(png).decode()
+
+    return dict(
+        source=f'data:image/png;base64,{b64}',
+        x=x_s, y=y_s,
+        sizex=display_px, sizey=display_px,
+        xanchor='center', yanchor='middle',
+        xref='x', yref='y',
+        layer='above',
+    )
+
+
+def _moon_layout_image(
+    planets_list: list[dict],
+    observer: Observer,
+    t: Optional[datetime],
+    width: int,
+    height: int,
+) -> Optional[dict]:
+    """Image Lune orientée 'zénith en haut' pour le layout Plotly."""
+    from engines.moon_engine import render_moon_image
+
+    moon = next(
+        (b for b in planets_list if b['name'] == 'Lune' and b.get('above_horizon')),
+        None,
+    )
+    if moon is None:
+        return None
+
+    alt = float(moon['alt'])
+    xy = altaz_to_xy(alt, float(moon['az']), width, height)
+    if xy is None:
+        return None
+    x_m, y_m = xy
+
+    cx, cy    = width / 2.0, height / 2.0
+    chart_r   = _effective_radius(width, height)
+
+    diam_arcsec = moon.get('ang_diam_arcsec') or 1842.0
+    diam_deg    = diam_arcsec / 3600.0
+    display_px  = max(12, min(20, int(chart_r / 90.0 * diam_deg * 8)))
+
+    if math.sqrt((x_m - cx) ** 2 + (y_m - cy) ** 2) > chart_r:
+        return None
+
+    # Rotation PIL CCW = atan2(x_m-cx, y_m-cy) — aligne Nord équatorial → zénith
+    # Dérivation : vecteur vers zénith dans l'espace image = (cx-x_m, cy-y_m) screen,
+    # angle CCW depuis "haut" = atan2(x_m-cx, y_m-cy).
+    chart_angle = math.degrees(math.atan2(x_m - cx, y_m - cy))
+
+    t_dt = t or datetime.now(timezone.utc)
+
+    png = render_moon_image(
+        t_dt=t_dt,
+        observer_lat=observer.lat,
+        observer_lon=observer.lon,
+        size=64,
+        flip=False,
+        rotation_deg=chart_angle,
+    )
+    b64 = base64.b64encode(png).decode()
+
+    return dict(
+        source=f'data:image/png;base64,{b64}',
+        x=x_m, y=y_m,
+        sizex=display_px, sizey=display_px,
+        xanchor='center', yanchor='middle',
+        xref='x', yref='y',
+        layer='above',
+    )
+
+
 def build_sky_chart(
     stars_df: pd.DataFrame,
     planets_list: list[dict],
@@ -714,6 +921,15 @@ def build_sky_chart(
     if opts["show_planets"]:
         for trace in _planet_traces(planets_list, width, height):
             fig.add_trace(trace)
+        _imgs = []
+        sun_img = _sun_layout_image(planets_list, width, height)
+        if sun_img is not None:
+            _imgs.append(sun_img)
+        moon_img = _moon_layout_image(planets_list, observer, t, width, height)
+        if moon_img is not None:
+            _imgs.append(moon_img)
+        if _imgs:
+            fig.update_layout(images=_imgs)
 
     # Satellites
     if opts.get("show_satellites") and satellites_data:

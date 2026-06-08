@@ -10,15 +10,22 @@ from datetime import datetime, time as dt_time, timezone
 import folium
 import pandas as pd
 import requests
+from pathlib import Path
+
 import streamlit as st
+import streamlit.components.v1 as _components
 from streamlit_folium import st_folium
+
+_resize_trigger = _components.declare_component(
+    "width_detector",
+    path=str(Path(__file__).parent / "components" / "width_detector"),
+)
 
 from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
-from renderers.sky_chart import build_sky_chart
 
 # ─── Configuration de la page ────────────────────────────────────────────────
 
@@ -64,10 +71,23 @@ st.markdown(
 
         /* Caption */
         .stCaption { color: #556688; }
+
+        /* Composant détecteur de resize — invisible mais actif */
+        iframe[title="app.width_detector"] {
+            visibility: hidden !important;
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            top: -9999px !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# Resize trigger : déclenche un re-run Streamlit quand la fenêtre change de taille,
+# ce qui permet à use_container_width=True de recalculer la largeur correcte.
+_resize_trigger(default=None, key="_resize_w")
 
 # ─── Helpers interface ───────────────────────────────────────────────────────
 
@@ -122,7 +142,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.4-satellites"
+_STATE_VERSION = "3.5-pluton"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -281,14 +301,43 @@ with st.sidebar:
 
     # ── Étoiles ──
     st.subheader("🔭 Étoiles")
+
+    import engines.hipparcos_catalog as _hip
+    _hip_ok = _hip.is_available()
+    _cat_options = ["BSC5 (9 096 ★, mag ≤ 8)"]
+    if _hip_ok:
+        _cat_options.append("Hipparcos (118 218 ★, mag ≤ 12)")
+    cat_choice = st.radio(
+        "Catalogue",
+        _cat_options,
+        key="star_catalog",
+        label_visibility="collapsed",
+    )
+    _use_hipparcos = cat_choice.startswith("Hipparcos")
+
+    if not _hip_ok:
+        if st.button("⬇ Télécharger Hipparcos (~55 Mo)"):
+            _prog = st.progress(0.0, text="Téléchargement…")
+            try:
+                _hip.download(progress_cb=lambda f: _prog.progress(f, text=f"Téléchargement… {f*100:.0f}%"))
+                _prog.empty()
+                st.success("Hipparcos téléchargé — rechargez la page.")
+            except Exception as _e:
+                _prog.empty()
+                st.error(f"Échec : {_e}")
+
+    _max_mag = 12.0 if _use_hipparcos else 8.0
+    _default_mag = min(st.session_state.get("mag_limit_val", 5.0), _max_mag)
     mag_limit = st.slider(
         "Magnitude limite",
         min_value=1.0,
-        max_value=7.0,
-        value=5.0,
+        max_value=_max_mag,
+        value=_default_mag,
         step=0.5,
-        help="Ciel parfait ≈ 6.5 · Ciel urbain ≈ 4.0–5.0",
+        help="Ciel parfait ≈ 6.5 · Ciel urbain ≈ 4.0–5.0" + (" · Oculaire ≈ 10–12" if _use_hipparcos else ""),
+        key="mag_limit_slider",
     )
+    st.session_state["mag_limit_val"] = mag_limit
 
     st.divider()
 
@@ -305,7 +354,38 @@ with st.sidebar:
         az_center = st.slider("Direction (az.)", 0, 359, key="az_center", format="%d°")
         st.caption(f"↗ {az_center}° — {_az_to_compass(az_center)}")
     if view_mode == "🔭 Oculaire":
-        st.slider("Champ (FOV)", 1, 60, 15, key="eyepiece_fov", format="%d°")
+        # Grossissement max = 60° / diam_lunaire quand la Lune est la cible
+        _ep_target_now = st.session_state.get("_eyepiece_target")
+        _ep_label = getattr(_ep_target_now, "label", "") if _ep_target_now else ""
+        _ep_label_l = _ep_label.lower()
+        if "lune" in _ep_label_l or "moon" in _ep_label_l:
+            _body_c = next(
+                (p for p in st.session_state.get("_planets_cache", [])
+                 if p["name"] == "Lune"), None)
+            _default_diam = 1842.0
+        elif "soleil" in _ep_label_l or "sun" in _ep_label_l:
+            _body_c = next(
+                (p for p in st.session_state.get("_planets_cache", [])
+                 if p["name"] == "Soleil"), None)
+            _default_diam = 1919.0
+        else:
+            _body_c = None
+            _default_diam = None
+
+        if _default_diam is not None:
+            _diam_deg = ((_body_c.get("ang_diam_arcsec") or _default_diam) / 3600.0) if _body_c else (_default_diam / 3600.0)
+            _max_gross = max(10, (int(60.0 / _diam_deg) // 5) * 5)
+        else:
+            _max_gross = 300
+        # Verrouiller la valeur courante si elle dépasse le nouveau max
+        _cur_gross = int(st.session_state.get("eyepiece_gross", 80))
+        if _cur_gross > _max_gross:
+            st.session_state["eyepiece_gross"] = _max_gross
+        _gross = st.slider("Grossissement ×", 10, _max_gross,
+                           min(80, _max_gross), step=5,
+                           key="eyepiece_gross", format="×%d")
+        _fov_preview = 60.0 / _gross
+        st.caption(f"Champ réel ≈ {_fov_preview:.2f}°  (champ apparent 60°)")
         st.text_input("🔍 Objet", key="search_query",
                       placeholder="Sirius, M42, Andromède, Jupiter…")
         _q = st.session_state.get("search_query", "").strip()
@@ -391,8 +471,11 @@ try:
                                 name=st.session_state.place_label or "Lieu personnalisé")
         t            = obs_dt
         planets_data = get_planets_data(observer, t)
-        catalog      = _load_catalog()
-        stars_df     = catalog.get_visible(observer, t, mag_limit=float(mag_limit))
+        if _use_hipparcos:
+            stars_df = _hip.get_visible(observer, t, mag_limit=float(mag_limit))
+        else:
+            catalog  = _load_catalog()
+            stars_df = catalog.get_visible(observer, t, mag_limit=float(mag_limit))
         messier_df   = (
             get_messier_visible(observer, t)
             if st.session_state.show_messier else None
@@ -429,7 +512,12 @@ try:
         # Mettre en cache les planètes pour la recherche (sidebar rendu avant calcul)
         st.session_state["_planets_cache"] = [
             {"name": p["name"], "alt": p["alt"], "az": p["az"],
-             "magnitude": p.get("magnitude"), "above_horizon": p.get("above_horizon", True)}
+             "magnitude": p.get("magnitude"), "above_horizon": p.get("above_horizon", True),
+             "ang_diam_arcsec": p.get("ang_diam_arcsec"),
+             "distance_au": p.get("distance_au"),
+             "ring_B_deg": p.get("ring_B_deg"),
+             "ring_P_deg": p.get("ring_P_deg"),
+             "parallactic_angle_deg": p.get("parallactic_angle_deg")}
             for p in planets_data
         ]
 
@@ -440,9 +528,14 @@ try:
 
         if _is_eyepiece:
             from engines.search_catalog import resolve_target
-            _fov    = float(st.session_state.get("eyepiece_fov", 15))
+            _gross  = float(st.session_state.get("eyepiece_gross", 80))
+            _fov    = 60.0 / _gross     # champ réel (60° champ apparent standard)
             _target = st.session_state.get("_eyepiece_target")
-            _stars_ep = catalog.get_visible(observer, t, mag_limit=8.0)
+            _ep_mag = max(mag_limit, 8.0) if _use_hipparcos else 8.0
+            if _use_hipparcos:
+                _stars_ep = _hip.get_visible(observer, t, mag_limit=_ep_mag, min_alt=-_fov / 2)
+            else:
+                _stars_ep = catalog.get_visible(observer, t, mag_limit=_ep_mag, min_alt=-_fov / 2)
             _messier_ep = (
                 get_messier_visible(observer, t)
                 if _display_options.get("show_messier") else None
@@ -452,31 +545,6 @@ try:
             else:
                 _alt_ep, _az_ep = resolve_target(_target, observer, t, planets_data)
                 _lbl_ep = _target.label
-            sky_fig = build_eyepiece_chart(
-                _alt_ep, _az_ep, _lbl_ep,
-                _stars_ep, fov_deg=_fov,
-                options=_display_options,
-                planets_data=planets_data,
-                messier_df=_messier_ep,
-                observer=observer,
-                t=t,
-                satellites_data=_sat_data,
-            )
-        elif _is_horizon:
-            sky_fig = build_horizon_chart(
-                stars_df, planets_data, observer, t,
-                az_center=float(_az_center),
-                messier_df=messier_df,
-                options=_display_options,
-                satellites_data=_sat_data,
-            )
-        else:
-            sky_fig = build_sky_chart(
-                stars_df, planets_data, observer, t,
-                messier_df=messier_df,
-                options=_display_options,
-                satellites_data=_sat_data,
-            )
 
         # TSL en heures, minutes, secondes
         tsl   = local_sidereal_time(observer, t)
@@ -520,12 +588,54 @@ col_chart, col_table = st.columns([2, 1], gap="medium")
 
 # ── Carte du ciel ──
 with col_chart:
-    st.plotly_chart(
-        sky_fig,
-        use_container_width=True,
-        config={"displayModeBar": False, "scrollZoom": False},
-        key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}",
-    )
+    sky_fig = None
+    try:
+        if _is_eyepiece:
+            sky_fig = build_eyepiece_chart(
+                _alt_ep, _az_ep, _lbl_ep,
+                _stars_ep, fov_deg=_fov,
+                options=_display_options,
+                planets_data=planets_data,
+                messier_df=_messier_ep,
+                observer=observer,
+                t=t,
+                satellites_data=_sat_data,
+            )
+        elif _is_horizon:
+            sky_fig = build_horizon_chart(
+                stars_df, planets_data, observer, t,
+                az_center=float(_az_center),
+                messier_df=messier_df,
+                options=_display_options,
+                satellites_data=_sat_data,
+            )
+        else:
+            from renderers.sky_chart import build_sky_chart
+            sky_fig = build_sky_chart(
+                stars_df, planets_data, observer, t,
+                messier_df=messier_df,
+                options=_display_options,
+                satellites_data=_sat_data,
+            )
+    except Exception as _fig_exc:
+        import traceback as _tb
+        st.error(f"Erreur de rendu : {_fig_exc}")
+        st.code(_tb.format_exc())
+
+    if sky_fig is not None:
+        # Effacer la largeur fixe du layout : use_container_width=True la remplace
+        # par la vraie largeur de la colonne à chaque re-run.
+        sky_fig.update_layout(width=None)
+        _ep_key_suffix = (
+            f"_ep_{_gross:.0f}_{_alt_ep:.2f}_{_az_ep:.2f}"
+            if _is_eyepiece else ""
+        )
+        st.plotly_chart(
+            sky_fig,
+            use_container_width=True,
+            config={"displayModeBar": False, "scrollZoom": _is_eyepiece},
+            key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
+        )
     with st.popover("ℹ️ À propos", use_container_width=False):
         st.markdown(
             """
@@ -554,59 +664,242 @@ Skyfield · Éphéméride JPL DE440s
 - Constellations & limites IAU : *d3-celestial* — Olaf Frohn
 - Voie Lactée : *mw.json* (polygones de densité galactique) — d3-celestial / Olaf Frohn
 - Catalogue Messier : données IAU / SEDS
+- Satellites artificiels : TLE Celestrak (stations, Starlink, OneWeb, météo, science, amateur, GPS) — rafraîchis toutes les 6 h
 - Fond cartographique : CartoDB Dark Matter · © OpenStreetMap contributors
 - Géocodage : Nominatim (OpenStreetMap)
 
 ---
 
 **Vues disponibles**
-- 🔭 Zénith — projection stéréographique azimutale centrée sur le zénith
+- 🌌 Zénith — projection stéréographique azimutale centrée sur le zénith
 - 🌄 Paysage — projection équirectangulaire (azimut × altitude) vers l'horizon
+- 🔭 Oculaire — champ télescopique centré sur une cible, projection gnomonique vraie
+
+**Satellites artificiels**
+Positions et trajectoires calculées en temps réel via Skyfield à partir des TLE Celestrak.
+La trajectoire affichée couvre ±5 min autour de l'instant courant (paramétrable).
+Seuls les satellites au-dessus de l'horizon sont visibles sur les cartes.
+
+---
+
+> ⚠️ **Redimensionnement de la fenêtre** — le graphique s'adapte automatiquement
+> lors de chaque recalcul. Si la mise en page ne suit pas après un changement de
+> taille de fenêtre, modifiez n'importe quel paramètre (magnitude, heure…)
+> ou activez le mode **Temps réel** pour forcer le recalcul.
             """
         )
 
 # ── Tableau éphémérides ──
 with col_table:
-    st.subheader("Éphémérides")
-
     # Corps triés : visibles d'abord, puis par altitude décroissante
     sorted_bodies = sorted(
         planets_data,
         key=lambda b: (not b["above_horizon"], -b["alt"]),
     )
 
-    planet_rows = []
-    for body in sorted_bodies:
-        above  = body["above_horizon"]
-        prefix = "" if above else "↓ "
-        icon   = ("☀" if body["name"] == "Soleil"
-                  else "🌙" if body["name"] == "Lune"
-                  else "⬤")
-        mag    = body["magnitude"]
+    tab_eph, tab_ecl, tab_moon, tab_conj = st.tabs(["Éphémérides", "Éclipses", "Lune", "Rapprochements"])
 
-        planet_rows.append({
-            "Astre":   prefix + icon + " " + body["name"],
-            "Altitude": f"{body['alt']:+.1f}°",
-            "Azimut":   f"{body['az']:.1f}°",
-            "Magnitude": f"{mag:.1f}" if mag is not None else "—",
-            "Lever":    body["rise"],
-            "Coucher":  body["set"],
-        })
+    with tab_eph:
+        main_rows = []
+        detail_rows = []
+        for body in sorted_bodies:
+            above  = body["above_horizon"]
+            prefix = "" if above else "↓ "
+            icon   = ("☀" if body["name"] == "Soleil"
+                      else "🌙" if body["name"] == "Lune"
+                      else "⬤")
+            mag    = body["magnitude"]
+            elong  = body.get("elongation")
 
-    planet_df = pd.DataFrame(planet_rows)
+            main_rows.append({
+                "Astre":     prefix + icon + " " + body["name"],
+                "Alt":       f"{body['alt']:+.1f}°",
+                "Az":        f"{body['az']:.1f}°",
+                "Mag":       f"{mag:.1f}" if mag is not None else "—",
+                "Lever":     body["rise"],
+                "Transit":   body.get("transit", "—"),
+                "Coucher":   body["set"],
+                "Élong.":    f"{elong:.0f}°" if elong is not None else "—",
+            })
 
-    st.dataframe(
-        planet_df,
-        use_container_width=True,
-        hide_index=True,
-        height=390,
-    )
+            dist   = body.get("distance_au")
+            diam   = body.get("ang_diam_arcsec")
+            illum  = body.get("illumination")
+            detail_rows.append({
+                "Astre":      icon + " " + body["name"],
+                "Dist. (UA)": f"{dist:.4f}" if dist is not None else "—",
+                "Diam. (\")":  f"{diam:.1f}\"" if diam is not None else "—",
+                "Phase (%)":  f"{illum:.1f}" if illum is not None else "—",
+            })
 
-    # Résumé rapide
+        st.dataframe(
+            pd.DataFrame(main_rows),
+            use_container_width=True,
+            hide_index=True,
+            height=374,
+        )
+
+        st.caption("Distance · Diamètre apparent · Phase")
+        st.dataframe(
+            pd.DataFrame(detail_rows),
+            use_container_width=True,
+            hide_index=True,
+            height=374,
+        )
+
+    with tab_ecl:
+        from engines.eclipse_engine import find_eclipses as _find_eclipses
+
+        @st.cache_data(ttl=86400, show_spinner="Calcul des éclipses…")
+        def _cached_eclipses():
+            return _find_eclipses()
+
+        _solar, _lunar = _cached_eclipses()
+
+        # ── Solaires ──────────────────────────────────────────────────
+        st.markdown("**☀ Éclipses solaires** — 3 prochaines années")
+        _TYPE_ICON = {
+            "Totale": "⬛", "Annulaire": "🔴", "Hybride": "🟠",
+            "Partielle": "🌗", "Partielle (rasante)": "🌘",
+        }
+        if _solar:
+            _sol_rows = []
+            for e in _solar:
+                _sol_rows.append({
+                    "Date":   e.dt_max.strftime("%Y-%m-%d"),
+                    "Heure":  e.dt_max.strftime("%H:%M") + " UTC",
+                    "Type":   _TYPE_ICON.get(e.type, "") + " " + e.type,
+                })
+            st.dataframe(pd.DataFrame(_sol_rows), use_container_width=True,
+                         hide_index=True)
+        else:
+            st.caption("Aucune éclipse solaire détectée sur la période.")
+
+        # ── Lunaires ──────────────────────────────────────────────────
+        st.markdown("**🌕 Éclipses lunaires** — 3 prochaines années")
+        _LTYPE_ICON = {"Totale": "🔴", "Partielle": "🌗", "Pénombrale": "🌑"}
+        if _lunar:
+            _lun_rows = []
+            for e in _lunar:
+                tot = (f"{int(e.totality_min)} min"
+                       if e.totality_min is not None else "—")
+                _lun_rows.append({
+                    "Date":      e.dt_max.strftime("%Y-%m-%d"),
+                    "Heure":     e.dt_max.strftime("%H:%M") + " UTC",
+                    "Type":      _LTYPE_ICON.get(e.type, "") + " " + e.type,
+                    "Totalité":  tot,
+                })
+            st.dataframe(pd.DataFrame(_lun_rows), use_container_width=True,
+                         hide_index=True)
+        else:
+            st.caption("Aucune éclipse lunaire détectée sur la période.")
+
+        st.caption("Heures UTC du maximum · éclipses solaires visibles sur une partie du globe seulement")
+
+    with tab_moon:
+        from engines.moon_engine import (
+            get_moon_info as _get_moon_info,
+            find_moon_phases as _find_moon_phases,
+        )
+
+        # ── Phase courante ────────────────────────────────────────────
+        from engines.moon_engine import render_moon_image as _render_moon
+        _mi = _get_moon_info(t)
+
+        # Rendu à midi UTC du jour sélectionné (cache module-level dans moon_engine)
+        _moon_png = _render_moon(
+            datetime(t.year, t.month, t.day, 12, 0, tzinfo=timezone.utc),
+            observer_lat=observer.lat,
+            observer_lon=observer.lon,
+            size=300,
+        )
+        _col_img, _col_info = st.columns([1, 1], gap="small")
+        with _col_img:
+            st.image(_moon_png, width=300)
+            st.caption("Zénith ↑ (angle parallactique)")
+        with _col_info:
+            st.markdown(
+                f"""
+                <div style="
+                    padding:16px 12px; background:#06061a;
+                    border-radius:8px; border:1px solid #1a2a4a;
+                    height:100%; box-sizing:border-box;">
+                    <div style="font-size:1.3rem; color:#aabbdd; margin-bottom:8px;">
+                        {_mi['icon']}&nbsp; {_mi['phase_name']}
+                    </div>
+                    <div style="color:#6677aa; font-size:0.88rem; line-height:1.9;">
+                        Illumination&nbsp;&nbsp;<b style="color:#99aacc">{_mi['illumination']:.1f}&nbsp;%</b><br>
+                        Âge&nbsp;&nbsp;<b style="color:#99aacc">{_mi['age_days']:.1f}&nbsp;j</b><br>
+                        Élongation&nbsp;&nbsp;<b style="color:#99aacc">{_mi['elong_deg']:.1f}°</b>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # ── Prochaines phases ─────────────────────────────────────────
+        @st.cache_data(ttl=1800, show_spinner=False)
+        def _c_phases(_day: str) -> list:
+            from datetime import date
+            y, mo, d = [int(x) for x in _day.split("-")]
+            t0 = datetime(y, mo, d, tzinfo=timezone.utc)
+            return _find_moon_phases(t0, months=3)
+
+        _phases = _c_phases(t.strftime("%Y-%m-%d"))
+        if _phases:
+            st.caption("Phases — 3 prochains mois")
+            st.dataframe(
+                pd.DataFrame([
+                    {"Phase": f"{p.icon} {p.name}",
+                     "Date":  p.dt.strftime("%Y-%m-%d"),
+                     "UTC":   p.dt.strftime("%H:%M")}
+                    for p in _phases
+                ]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    with tab_conj:
+        from engines.moon_engine import (
+            find_conjunctions as _find_conjunctions,
+            PLANET_ICONS as _PLANET_ICONS,
+        )
+
+        @st.cache_data(ttl=3600, show_spinner="Calcul des rapprochements…")
+        def _c_conj(_day: str) -> list:
+            y, mo, d = [int(x) for x in _day.split("-")]
+            t0 = datetime(y, mo, d, tzinfo=timezone.utc)
+            return _find_conjunctions(t0)
+
+        _conjs = _c_conj(t.strftime("%Y-%m-%d"))
+        if _conjs:
+            st.caption("Lune–planète (< 5°) · planète–planète (< 2°) — 3 prochains mois")
+            st.dataframe(
+                pd.DataFrame([
+                    {
+                        "Date": e.dt.strftime("%Y-%m-%d"),
+                        "UTC":  e.dt.strftime("%H:%M"),
+                        "Corps": (
+                            f"{_PLANET_ICONS.get(e.body1,'⬤')} {e.body1}"
+                            "  ·  "
+                            f"{_PLANET_ICONS.get(e.body2,'⬤')} {e.body2}"
+                        ),
+                        "Sep.": f"{e.separation_deg:.1f}°",
+                    }
+                    for e in _conjs
+                ]),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("Aucun rapprochement notable sur 3 mois.")
+
+    # Résumé rapide (hors onglet)
     nb_visible_bodies = sum(1 for b in planets_data if b["above_horizon"])
+    nb_total_bodies   = len(planets_data)
     st.caption(
         f"🌟 {len(stars_df)} étoiles visibles (mag ≤ {mag_limit:.1f})  ·  "
-        f"🪐 {nb_visible_bodies}/9 corps au-dessus de l'horizon"
+        f"🪐 {nb_visible_bodies}/{nb_total_bodies} corps au-dessus de l'horizon"
     )
 
 # ─── Rafraîchissement automatique (temps réel) ───────────────────────────────

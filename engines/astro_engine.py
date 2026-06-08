@@ -113,9 +113,22 @@ _BODIES: dict[str, str] = {
     "Saturne": "saturn barycenter",
     "Uranus": "uranus barycenter",
     "Neptune": "neptune barycenter",
+    "Pluton": "pluto barycenter",
     "Soleil": "sun",
     "Lune": "moon",
 }
+
+# Rayons équatoriaux (km) pour le diamètre apparent
+_RADII_KM: dict[str, float] = {
+    "Mercure": 2439.7, "Vénus": 6051.8, "Mars": 3396.2,
+    "Jupiter": 71492.0, "Saturne": 60268.0, "Uranus": 25559.0,
+    "Neptune": 24764.0, "Pluton": 1188.3, "Soleil": 695700.0, "Lune": 1737.4,
+}
+_AU_KM = 149_597_870.7
+
+# Pôle IAU de Saturne (J2000) pour le calcul de l'inclinaison des anneaux
+_SAT_POLE_RA_RAD  = math.radians(40.589)
+_SAT_POLE_DEC_RAD = math.radians(83.537)
 
 # Magnitudes visuelles de repli (moyennes)
 _MAG_FALLBACK: dict[str, float] = {
@@ -128,6 +141,7 @@ _MAG_FALLBACK: dict[str, float] = {
     "Saturne": 0.46,
     "Uranus": 5.68,
     "Neptune": 7.78,
+    "Pluton": 14.3,
 }
 
 # Corps pour lesquels planetary_magnitude() est disponible (planètes)
@@ -156,6 +170,74 @@ def _compute_magnitude(name: str, body_key: str, observer: Observer, t_sky) -> f
 
 def _fmt_utc(t_sky) -> str:
     return t_sky.utc_datetime().strftime("%H:%M")
+
+
+def _transit_time(body_key: str, observer: Observer, t_sky) -> str:
+    """Heure UTC du passage au méridien (HH:MM) pour la journée courante."""
+    try:
+        eph = _get_eph()
+        location = observer.skyfield_location()
+        app = (eph["earth"] + location).at(t_sky).observe(eph[body_key]).apparent()
+        ra, _, _ = app.radec()
+        gast = t_sky.gast
+        last = (gast + observer.lon / 15.0) % 24.0
+        ha = (last - ra.hours) % 24.0   # angle horaire courant en heures (0-24)
+        # décalage jusqu'au transit en heures sidérales
+        delta_sid = (24.0 - ha) if ha > 12.0 else -ha
+        # 1 heure sidérale = 3590.17 secondes solaires
+        t_utc = t_sky.utc_datetime() + timedelta(seconds=delta_sid * 3590.17)
+        return t_utc.strftime("%H:%M")
+    except Exception:
+        return "—"
+
+
+def _elongation_deg(body_key: str, observer: Observer, t_sky) -> float | None:
+    """Élongation en degrés (séparation angulaire au Soleil vue depuis l'observateur)."""
+    if body_key == "sun":
+        return None
+    try:
+        eph = _get_eph()
+        location = observer.skyfield_location()
+        earth_at_t = (eph["earth"] + location).at(t_sky)
+        sun_pos = earth_at_t.observe(eph["sun"])
+        body_pos = earth_at_t.observe(eph[body_key])
+        return float(sun_pos.separation_from(body_pos).degrees)
+    except Exception:
+        return None
+
+
+def _angular_diameter_arcsec(name: str, distance_au: float) -> float | None:
+    """Diamètre apparent en secondes d'arc."""
+    radius_km = _RADII_KM.get(name)
+    if radius_km is None or distance_au <= 0:
+        return None
+    dist_km = distance_au * _AU_KM
+    return 2.0 * math.degrees(math.atan2(radius_km, dist_km)) * 3600.0
+
+
+def _illumination_pct(name: str, body_key: str, observer: Observer, t_sky) -> float | None:
+    """Fraction illuminée en % (phase). None pour le Soleil."""
+    if name == "Soleil":
+        return None
+    try:
+        eph = _get_eph()
+        location = observer.skyfield_location()
+        if name == "Lune":
+            from skyfield import almanac as _alm
+            return round(float(_alm.fraction_illuminated(eph, "moon", t_sky)) * 100.0, 1)
+        # Planètes : angle de phase via loi des cosinus
+        earth_at_t = (eph["earth"] + location).at(t_sky)
+        d_ep = earth_at_t.observe(eph[body_key]).distance().au
+        d_es = earth_at_t.observe(eph["sun"]).distance().au
+        d_sp = eph[body_key].at(t_sky).observe(eph["sun"]).distance().au
+        denom = 2.0 * d_ep * d_sp
+        if denom == 0:
+            return None
+        cos_phase = (d_ep**2 + d_sp**2 - d_es**2) / denom
+        cos_phase = max(-1.0, min(1.0, cos_phase))
+        return round((1.0 + cos_phase) / 2.0 * 100.0, 1)
+    except Exception:
+        return None
 
 
 def _rise_set_times(body_key: str, observer: Observer, t_sky) -> tuple[str, str]:
@@ -243,16 +325,57 @@ def get_planets_data(
 
         mag = _compute_magnitude(name, body_key, observer, t_sky)
         rise_str, set_str = _rise_set_times(body_key, observer, t_sky)
+        transit_str = _transit_time(body_key, observer, t_sky)
+        distance_au = round(astrometric.distance().au, 4)
+        elongation  = _elongation_deg(body_key, observer, t_sky)
+        ang_diam    = _angular_diameter_arcsec(name, distance_au)
+        illumination = _illumination_pct(name, body_key, observer, t_sky)
+
+        ring_B_deg = ring_P_deg = parallactic_angle_deg = None
+        if name == "Saturne":
+            try:
+                ra_obj, dec_obj, _ = apparent.radec()
+                ra_r  = math.radians(ra_obj.degrees)
+                dec_r = math.radians(dec_obj.degrees)
+                lst_deg = local_sidereal_time(observer, t)
+                H_rad   = math.radians(lst_deg * 15.0 - ra_obj.degrees)
+                lat_r   = math.radians(observer.lat)
+                q = math.atan2(
+                    math.sin(H_rad),
+                    math.tan(lat_r) * math.cos(dec_r) - math.sin(dec_r) * math.cos(H_rad),
+                )
+                a0, d0 = _SAT_POLE_RA_RAD, _SAT_POLE_DEC_RAD
+                B = math.asin(
+                    math.sin(d0) * math.sin(dec_r)
+                    + math.cos(d0) * math.cos(dec_r) * math.cos(a0 - ra_r)
+                )
+                P = math.atan2(
+                    math.cos(d0) * math.sin(a0 - ra_r),
+                    math.sin(d0) * math.cos(dec_r) - math.cos(d0) * math.sin(dec_r) * math.cos(a0 - ra_r),
+                )
+                ring_B_deg            = round(math.degrees(B), 2)
+                ring_P_deg            = round(math.degrees(P), 1)
+                parallactic_angle_deg = round(math.degrees(q), 1)
+            except Exception:
+                pass
 
         results.append(
             {
-                "name": name,
-                "alt": round(alt_deg, 3),
-                "az": round(az_deg, 3),
-                "magnitude": round(mag, 2) if not math.isnan(mag) else None,
-                "rise": rise_str,
-                "set": set_str,
+                "name":          name,
+                "alt":           round(alt_deg, 3),
+                "az":            round(az_deg, 3),
+                "magnitude":     round(mag, 2) if not math.isnan(mag) else None,
+                "rise":          rise_str,
+                "set":           set_str,
+                "transit":       transit_str,
+                "distance_au":   distance_au,
+                "elongation":    round(elongation, 1) if elongation is not None else None,
+                "ang_diam_arcsec": round(ang_diam, 2) if ang_diam is not None else None,
+                "illumination":  illumination,
                 "above_horizon": above,
+                "ring_B_deg":            ring_B_deg,
+                "ring_P_deg":            ring_P_deg,
+                "parallactic_angle_deg": parallactic_angle_deg,
             }
         )
 
