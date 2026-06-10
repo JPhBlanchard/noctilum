@@ -118,8 +118,14 @@ _DEFAULTS: dict = {
     "lon":       2.3362,
     "elev":     60,
     "realtime": False,
+    # obs_date / obs_time : TOUJOURS en UTC
     "obs_date": _now.date(),
     "obs_time": _now.time().replace(second=0, microsecond=0),
+    # obs_date_loc / obs_time_loc : heure locale (clés séparées, jamais mélangées avec UTC)
+    "obs_date_loc": _now.date(),
+    "obs_time_loc": _now.time().replace(second=0, microsecond=0),
+    "time_mode": "UTC",       # "UTC" ou "Locale"
+    "_prev_time_mode": "UTC", # pour détecter le changement de mode
     # Affichage
     "show_stars":        True,
     "show_planets":      True,
@@ -139,10 +145,10 @@ _DEFAULTS: dict = {
     "view_mode": "🔭 Zénith",
     "az_center": 180,
     "place_label":       "Observatoire de Paris",
-    "_last_click_id":    None,   # tuple (lat, lon) du dernier clic traité
+    "_last_click_id":    None,
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.5-pluton"
+_STATE_VERSION = "3.7-clock"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -284,18 +290,73 @@ with st.sidebar:
     st.divider()
 
     # ── Date & Heure ──
-    st.subheader("🕐 Date & Heure (UTC)")
+    st.subheader("🕐 Date & Heure")
     realtime = st.checkbox("⏱ Temps réel", key="realtime")
 
     now_utc = datetime.now(timezone.utc)
 
+    # Choix UTC / heure locale
+    time_mode = st.radio(
+        "Référentiel",
+        ["UTC", "Locale"],
+        horizontal=True,
+        key="time_mode",
+        label_visibility="collapsed",
+    )
+
+    # Fuseau du lieu courant (utilisé si mode Locale)
+    _cur_lat = float(st.session_state.get("lat", 48.8362))
+    _cur_lon = float(st.session_state.get("lon",  2.3362))
+    from engines.time_engine import get_timezone_name as _get_tz, local_datetime as _to_local
+    from zoneinfo import ZoneInfo as _ZoneInfo
+    _tz_name = _get_tz(_cur_lat, _cur_lon)
+    _tz_zone = _ZoneInfo(_tz_name)
+
     if realtime:
         obs_dt = now_utc
-        st.caption(f"UTC : {now_utc.strftime('%Y-%m-%d  %H:%M:%S')}")
+        if time_mode == "UTC":
+            st.caption(f"UTC : {now_utc.strftime('%Y-%m-%d  %H:%M:%S')}")
+        else:
+            _now_local = now_utc.astimezone(_tz_zone)
+            st.caption(f"{_tz_name} : {_now_local.strftime('%Y-%m-%d  %H:%M:%S %Z')}")
     else:
-        obs_date = st.date_input("Date", key="obs_date")
-        obs_time = st.time_input("Heure", key="obs_time", step=60)
-        obs_dt = datetime.combine(obs_date, obs_time, tzinfo=timezone.utc)
+        # Détection du changement de mode UTC ↔ Locale
+        _prev_mode = st.session_state.get("_prev_time_mode", "UTC")
+        if _prev_mode != time_mode:
+            if time_mode == "Locale":
+                # Passage UTC → Locale : convertir les valeurs UTC stockées en local
+                _utc_stored = datetime.combine(
+                    st.session_state["obs_date"],
+                    st.session_state["obs_time"],
+                    tzinfo=timezone.utc,
+                )
+                _loc_init = _utc_stored.astimezone(_tz_zone)
+                st.session_state["obs_date_loc"] = _loc_init.date()
+                st.session_state["obs_time_loc"] = _loc_init.time().replace(second=0, microsecond=0)
+            else:
+                # Passage Locale → UTC : convertir les valeurs locales stockées en UTC
+                _loc_stored = datetime.combine(
+                    st.session_state["obs_date_loc"],
+                    st.session_state["obs_time_loc"],
+                ).replace(tzinfo=_tz_zone).astimezone(timezone.utc)
+                st.session_state["obs_date"] = _loc_stored.date()
+                st.session_state["obs_time"] = _loc_stored.time().replace(second=0, microsecond=0)
+            st.session_state["_prev_time_mode"] = time_mode
+
+        if time_mode == "UTC":
+            # Clés UTC — obs_date/obs_time contiennent toujours du temps UTC
+            obs_date = st.date_input("Date (UTC)", key="obs_date")
+            obs_time = st.time_input("Heure (UTC)", key="obs_time", step=60)
+            obs_dt = datetime.combine(obs_date, obs_time, tzinfo=timezone.utc)
+        else:
+            # Clés séparées — obs_date_loc/obs_time_loc contiennent l'heure locale
+            obs_date_loc = st.date_input(f"Date ({_tz_name})", key="obs_date_loc")
+            obs_time_loc = st.time_input(f"Heure ({_tz_name})", key="obs_time_loc", step=60)
+            obs_dt = (
+                datetime.combine(obs_date_loc, obs_time_loc)
+                .replace(tzinfo=_tz_zone)
+                .astimezone(timezone.utc)
+            )
 
     st.divider()
 
@@ -552,6 +613,10 @@ try:
         tsl_m = int((tsl % 1) * 60)
         tsl_s = int(((tsl % 1) * 60 % 1) * 60)
 
+        # Informations temporelles complètes (onglet Temps)
+        from engines.time_engine import compute_time_info as _compute_time_info
+        _time_info = _compute_time_info(t, float(lat), float(lon))
+
 except Exception as exc:
     import traceback
     st.error(f"Erreur de calcul : {exc}")
@@ -697,7 +762,7 @@ with col_table:
         key=lambda b: (not b["above_horizon"], -b["alt"]),
     )
 
-    tab_eph, tab_ecl, tab_moon, tab_conj = st.tabs(["Éphémérides", "Éclipses", "Lune", "Rapprochements"])
+    tab_temps, tab_eph, tab_coord, tab_ecl, tab_moon, tab_conj, tab_crep = st.tabs(["Temps", "Éphémérides", "Coordonnées", "Éclipses", "Lune", "Rapprochements", "Crépuscules"])
 
     with tab_eph:
         main_rows = []
@@ -745,6 +810,30 @@ with col_table:
             use_container_width=True,
             hide_index=True,
             height=374,
+        )
+
+    with tab_coord:
+        from engines.coords_engine import get_all_coordinates as _get_coords, coords_to_rows as _coords_to_rows
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def _cached_coords(_lat, _lon, _elev, _name, _ts):
+            _obs = Observer(lat=_lat, lon=_lon, elevation=_elev, name=_name)
+            _t   = datetime.fromisoformat(_ts)
+            return _coords_to_rows(_get_coords(_obs, _t))
+
+        _coord_key = t.isoformat()
+        _coord_rows = _cached_coords(
+            float(lat), float(lon), float(elev),
+            st.session_state.place_label or "Lieu", _coord_key
+        )
+        st.dataframe(
+            pd.DataFrame(_coord_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "Écliptiques de date (équinoxe courant) · Équatoriales ICRF J2000 · "
+            "Alt/Az topocentriques avec réfraction atmosphérique"
         )
 
     with tab_ecl:
@@ -893,6 +982,189 @@ with col_table:
             )
         else:
             st.caption("Aucun rapprochement notable sur 3 mois.")
+
+    with tab_temps:
+        from engines.time_engine import equation_of_time_curve as _eot_curve, gmst_hours as _gmst_hours
+        import plotly.graph_objects as go
+
+        ti = _time_info
+
+        # ── Formateur heures décimales → H h MM m SS s ────────────────
+        def _fmt_h(h: float) -> str:
+            hh = int(h)
+            mm = int((h % 1) * 60)
+            ss = int(((h % 1) * 60 % 1) * 60)
+            return f"{hh:02d}<sup>h</sup>{mm:02d}<sup>m</sup>{ss:02d}<sup>s</sup>"
+
+        # Offset UTC de l'heure locale
+        _loc_label = f"{ti.tz_name} (UTC{ti.utc_offset})"
+
+        # ── Tableau des temps ──────────────────────────────────────────
+        _time_rows = [
+            {"Grandeur": "Date & Heure UTC",
+             "Valeur": ti.dt_utc.strftime("%Y-%m-%d  %H:%M:%S UTC")},
+            {"Grandeur": f"Date & Heure locale ({_loc_label})",
+             "Valeur": ti.dt_local.strftime("%Y-%m-%d  %H:%M:%S %Z")},
+            {"Grandeur": "Jour Julien (JD UTC)",
+             "Valeur": f"{ti.jd_utc:.6f}"},
+            {"Grandeur": "Jour Julien (JD TT)",
+             "Valeur": f"{ti.jd_tt:.6f}"},
+            {"Grandeur": "ΔT  (TT − UTC)",
+             "Valeur": f"{ti.delta_t_s:.2f} s"},
+            {"Grandeur": "TSMG — Temps Sidéral Moyen Greenwich",
+             "Valeur": f"{int(ti.gmst_h):02d}h {int((ti.gmst_h % 1)*60):02d}m {int(((ti.gmst_h % 1)*60 % 1)*60):02d}s"},
+            {"Grandeur": "TSL — Temps Sidéral Local",
+             "Valeur": f"{tsl_h:02d}h {tsl_m:02d}m {tsl_s:02d}s"},
+            {"Grandeur": "Équation du temps",
+             "Valeur": f"{ti.eot_min:+.4f} min"},
+        ]
+        st.dataframe(
+            pd.DataFrame(_time_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # ── Graphique équation du temps (courbe annuelle) ──────────────
+        @st.cache_data(ttl=86400, show_spinner=False)
+        def _cached_eot_curve(_year: int):
+            return _eot_curve(_year)
+
+        _year_sim = ti.dt_utc.year
+        _eot_dates, _eot_vals = _cached_eot_curve(_year_sim)
+
+        # Marqueur à la date de simulation
+        _today_str = ti.dt_utc.strftime("%Y-%m-%d")
+        _marker_eot = ti.eot_min
+
+        _fig_eot = go.Figure()
+
+        # Zone positive / négative (remplissage)
+        _fig_eot.add_trace(go.Scatter(
+            x=_eot_dates, y=_eot_vals,
+            fill="tozeroy",
+            fillcolor="rgba(100, 150, 255, 0.12)",
+            line=dict(color="#6699ff", width=1.5),
+            name="Équation du temps",
+            hovertemplate="%{x}<br>EoT : %{y:.2f} min<extra></extra>",
+        ))
+
+        # Ligne zéro
+        _fig_eot.add_hline(y=0, line_color="#334466", line_width=1)
+
+        # Marqueur date courante
+        _fig_eot.add_trace(go.Scatter(
+            x=[_today_str], y=[_marker_eot],
+            mode="markers+text",
+            marker=dict(color="#ffcc44", size=10, symbol="circle"),
+            text=[f"  {_marker_eot:+.2f} min"],
+            textposition="top right",
+            textfont=dict(color="#ffcc44", size=11),
+            name="Date simulée",
+            hovertemplate=f"{_today_str}<br>EoT : {_marker_eot:.2f} min<extra></extra>",
+        ))
+
+        # Ligne verticale date courante
+        _fig_eot.add_vline(
+            x=_today_str,
+            line_color="#ffcc44",
+            line_width=1,
+            line_dash="dot",
+        )
+
+        _fig_eot.update_layout(
+            title=dict(
+                text=f"Équation du temps — {_year_sim}",
+                font=dict(color="#8899ff", size=14),
+                x=0.5,
+            ),
+            paper_bgcolor="#05050f",
+            plot_bgcolor="#07071a",
+            font=dict(color="#8899bb"),
+            margin=dict(l=50, r=20, t=50, b=40),
+            height=280,
+            xaxis=dict(
+                showgrid=True,
+                gridcolor="#111133",
+                tickformat="%b",
+                tickfont=dict(size=10),
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor="#111133",
+                title="minutes",
+                tickfont=dict(size=10),
+                zeroline=False,
+            ),
+            showlegend=False,
+            hovermode="x unified",
+        )
+        st.plotly_chart(_fig_eot, use_container_width=True, config={"displayModeBar": False})
+        st.caption(
+            "EoT positive → le Soleil transit avant 12h00 solaire moyen · "
+            "Formule analytique (Meeus) · précision ≈ 0.5 min"
+        )
+
+    with tab_crep:
+        from engines.twilight_engine import get_solar_events as _get_solar, get_lunar_events as _get_lunar
+        from zoneinfo import ZoneInfo as _ZI
+
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _c_solar_events(_lat, _lon, _elev, _name, _day_str):
+            _obs = Observer(lat=_lat, lon=_lon, elevation=_elev, name=_name)
+            _dt = datetime.strptime(_day_str, "%Y-%m-%d").replace(hour=12, tzinfo=timezone.utc)
+            return _get_solar(_obs, _dt), _get_lunar(_obs, _dt)
+
+        _ti = _time_info
+        _tz_crep = _ZI(_ti.tz_name)
+        _day_key = t.strftime("%Y-%m-%d")
+        _solar_evts, _lunar_evts = _c_solar_events(
+            float(lat), float(lon), float(elev),
+            st.session_state.place_label or "Lieu", _day_key
+        )
+
+        def _fmt_event_rows(events, tz, utc_offset_str):
+            rows = []
+            for ev in events:
+                if ev.dt_utc is None:
+                    rows.append({
+                        "Événement": ev.label,
+                        "UTC": "—",
+                        f"Locale ({utc_offset_str})": "—",
+                        "Azimut": "—",
+                        "Hauteur": "—",
+                    })
+                else:
+                    dt_loc = ev.dt_utc.astimezone(tz)
+                    az_s = f"{ev.az:.1f}°" if ev.az is not None else "—"
+                    # Hauteur au transit uniquement (passage méridien soleil ou transit lune)
+                    _is_transit = "méridien" in ev.label.lower() or "transit" in ev.label.lower()
+                    alt_s = f"{ev.alt:+.1f}°" if ev.alt is not None and _is_transit else "—"
+                    rows.append({
+                        "Événement": ev.label,
+                        "UTC": ev.dt_utc.strftime("%H:%M"),
+                        f"Locale ({utc_offset_str})": dt_loc.strftime("%H:%M"),
+                        "Azimut": az_s,
+                        "Hauteur": alt_s,
+                    })
+            return rows
+
+        _off = _ti.utc_offset
+        st.markdown("**☀ Soleil**")
+        st.dataframe(
+            pd.DataFrame(_fmt_event_rows(_solar_evts, _tz_crep, _off)),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.markdown("**🌙 Lune**")
+        st.dataframe(
+            pd.DataFrame(_fmt_event_rows(_lunar_evts, _tz_crep, _off)),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "Civil −6° · Nautique −12° · Astronomique −18° · "
+            "Hauteur affichée uniquement au passage du méridien"
+        )
 
     # Résumé rapide (hors onglet)
     nb_visible_bodies = sum(1 for b in planets_data if b["above_horizon"])

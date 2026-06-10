@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>html,body{margin:0;padding:0;overflow:hidden;}</style>
+<script>
+(function () {
+    function post(type, extra) {
+        window.parent.postMessage(
+            Object.assign({ isStreamlitMessage: true, type: type }, extra), "*"
+        );
+    }
+
+    // Protocole Streamlit requis : componentReady puis setFrameHeight
+    post("streamlit:componentReady", { apiVersion: 1 });
+    post("streamlit:setFrameHeight", { height: 0 });
+
+    // Répondre aux renders Streamlit en confirmant la hauteur 0
+    window.addEventListener("message", function (e) {
+        if (e.data && e.data.type === "streamlit:render") {
+            post("streamlit:setFrameHeight", { height: 0 });
+        }
+    });
+
+    // Déclencher un re-run Streamlit uniquement lors d'un vrai resize fenêtre
+    var lastW = 0;
+    var _t;
+    window.addEventListener("resize", function () {
+        clearTimeout(_t);
+        _t = setTimeout(function () {
+            var w = window.parent.innerWidth;
+            if (w !== lastW) {
+                lastW = w;
+                post("streamlit:setComponentValue", { value: w });
+            }
+        }, 250);
+    });
+})();
+</script>
+</head>
+<body></body>
+</html>

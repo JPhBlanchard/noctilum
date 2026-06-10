@@ -6,3 +6,4 @@ numpy>=1.26
 requests
 healpy>=1.16
 astropy>=5.3
+timezonefinder>=6.0

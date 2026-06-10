@@ -160,9 +160,10 @@ class StarCatalog:
         observer: Observer,
         t: Optional[datetime] = None,
         mag_limit: float = 5.0,
+        min_alt: float = 0.0,
     ) -> pd.DataFrame:
         """
-        Retourne les étoiles visibles (alt > 0°) sous la limite de magnitude.
+        Retourne les étoiles au-dessus de min_alt° sous la limite de magnitude.
 
         Colonnes supplémentaires : alt_deg, az_deg.
         Le calcul est vectorisé via Skyfield Star (un seul appel pour toutes
@@ -194,7 +195,7 @@ class StarCatalog:
         candidates["alt_deg"] = alt.degrees
         candidates["az_deg"] = az.degrees
 
-        return candidates[candidates["alt_deg"] > 0.0].reset_index(drop=True)
+        return candidates[candidates["alt_deg"] > min_alt].reset_index(drop=True)
 
     # ------------------------------------------------------------------
     # Utilitaires

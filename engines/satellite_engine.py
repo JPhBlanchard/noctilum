@@ -7,6 +7,7 @@ Données cachées dans data/tle_<groupe>.txt, rafraîchies toutes les 6 heures.
 from __future__ import annotations
 
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,13 +20,14 @@ from engines.astro_engine import _get_ts
 # ── Configuration des groupes ─────────────────────────────────────────────────
 
 GROUPS: dict[str, str] = {
-    "ISS / Stations":  "https://celestrak.org/GP/query?GROUP=stations&FORMAT=tle",
-    "Starlink":        "https://celestrak.org/GP/query?GROUP=starlink&FORMAT=tle",
-    "OneWeb":          "https://celestrak.org/GP/query?GROUP=oneweb&FORMAT=tle",
-    "Météo (NOAA)":    "https://celestrak.org/GP/query?GROUP=weather&FORMAT=tle",
-    "Science":         "https://celestrak.org/GP/query?GROUP=science&FORMAT=tle",
-    "Amateur (AMSAT)": "https://celestrak.org/GP/query?GROUP=amateur&FORMAT=tle",
-    "GPS":             "https://celestrak.org/GP/query?GROUP=gps-ops&FORMAT=tle",
+    "ISS / Stations":  "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle",
+    "Lumineux (100+)": "https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle",
+    "Starlink":        "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle",
+    "OneWeb":          "https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle",
+    "Météo (NOAA)":    "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
+    "Science":         "https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle",
+    "Amateur (AMSAT)": "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle",
+    "GPS":             "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
 }
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
@@ -49,8 +51,21 @@ def _tle_fresh(path: Path) -> bool:
 
 def _fetch_tle(group: str) -> str:
     url = GROUPS[group]
-    with urllib.request.urlopen(url, timeout=_DL_TIMEOUT) as resp:
-        return resp.read().decode("utf-8")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; Noctilum/1.0)"})
+    try:
+        with urllib.request.urlopen(req, timeout=_DL_TIMEOUT) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        # Celestrak retourne 403 quand les données n'ont pas changé depuis le dernier dl
+        body = exc.read().decode("utf-8", errors="replace")
+        if "not updated" in body or "GP data has not" in body:
+            raise _NotUpdatedError() from exc
+        raise
+    return body
+
+
+class _NotUpdatedError(Exception):
+    """Celestrak indique que les données n'ont pas changé depuis le dernier téléchargement."""
 
 
 def _load_tle_text(group: str) -> str:
@@ -60,6 +75,11 @@ def _load_tle_text(group: str) -> str:
             text = _fetch_tle(group)
             _DATA_DIR.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
+        except _NotUpdatedError:
+            # Données inchangées selon Celestrak — garder le cache existant même s'il est vieux
+            if path.exists():
+                return path.read_text(encoding="utf-8")
+            raise RuntimeError(f"Aucun cache local pour '{group}' et Celestrak indique que les données n'ont pas changé.")
         except Exception:
             if path.exists():
                 return path.read_text(encoding="utf-8")
