@@ -199,7 +199,7 @@ def get_ecliptic_grid(
     height: int = 800,
     lon_step: int = 30,
     lat_step: int = 10,
-    lat_max: int = 30,
+    lat_max: int = 85,
 ) -> tuple[list, list]:
     """Grille écliptique: méridiens de longitude (tous les lon_step°) et parallèles de latitude."""
     eps = math.radians(_EPS_DEG)
@@ -244,7 +244,7 @@ def get_ecliptic_grid_altaz(
     t=None,
     lon_step: int = 30,
     lat_step: int = 10,
-    lat_max: int = 30,
+    lat_max: int = 85,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """Retourne une liste de (alts, azs) — un tableau par ligne de grille écliptique."""
     eps   = math.radians(_EPS_DEG)
