@@ -44,7 +44,7 @@ _LABEL_CLR        = '#FFFFFF'
 _CONST_LINE_COLOR  = 'rgba(100, 130, 220, 0.65)'
 _CONST_BOUND_COLOR = 'rgba(80,  110, 180, 0.45)'
 _ECLIPTIC_COLOR    = 'rgba(255, 210, 60, 0.55)'
-_ECLIPTIC_GRID_COLOR = 'rgba(255, 190, 40, 0.28)'
+_ECLIPTIC_GRID_COLOR = 'rgba(255, 190, 40, 0.55)'
 _GRID_COLOR        = 'rgba(80, 120, 200, 0.55)'
 
 _PLANET_NAMES = frozenset(
