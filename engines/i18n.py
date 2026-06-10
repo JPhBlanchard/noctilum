@@ -385,11 +385,25 @@ Seuls les satellites au-dessus de l'horizon sont visibles sur les cartes.
 
 ---
 
-**Functional specifications**
-Jean-Philippe Blanchard
+At the origin of this project lies a passion for astronomy that led me, several years ago, to program on Arduino in C functions to calculate the ephemerides of the Sun and Moon, using approximation algorithms such as those of Benoît and Pierre BECKER, then to go further in Python using libraries based on the work of Jean MEEUS, described in his work *Astronomical Algorithms* published by Willmann-Bell.
 
-**Software development**
-Claude Sonnet 4.6 — Anthropic
+A few weeks ago I became interested in AI again. What progress since my first approaches in the early 1980s with rule bases in fuzzy logic, then in the late 1980s when I was developing my first neural networks with a few layers and fewer than a thousand neurons!
+
+Today, AI systems have unimaginable power that will need to be tamed.
+
+A retired computer scientist, I took less than a week ago Claude from Anthropic as a "travelling companion"… and the shock was real! Starting from functional and technical specifications that were sometimes sketchy, and textual ergonomic descriptions, after about thirty hours of dialogue, I obtained an application that is certainly improvable but would have taken me months of work… The world of computer scientists is truly undergoing a "Copernican" revolution!
+
+AI systems are formidable tools, but they will disrupt the world of work in all domains including the hard sciences — we will need to be able to channel them and detect their drifts. For the human species, this is an existential question.
+
+*Saint-Herblain, 10/06/2026.*
+
+---
+
+**Contributions**
+
+Functional, technical and ergonomic specifications — **Jean-Philippe BLANCHARD**
+
+Software development — **Claude Sonnet 4.6** & **Claude Code 2.1.170** — Anthropic
 
 ---
 
@@ -560,11 +574,25 @@ Only satellites above the horizon are visible on the charts.
 
 ---
 
-**Especificaciones funcionales**
-Jean-Philippe Blanchard
+En el origen de este proyecto hay una pasión por la astronomía que me llevó hace algunos años a programar en Arduino en C funciones para calcular las efemérides del Sol y la Luna, mediante algoritmos de aproximación como los de Benoît y Pierre BECKER, y luego a ir más lejos en Python utilizando bibliotecas basadas en los trabajos de Jean MEEUS, descritos en su obra *Algoritmos astronómicos* publicada por Willmann-Bell.
 
-**Desarrollo de software**
-Claude Sonnet 4.6 — Anthropic
+Hace unas semanas volví a interesarme por la IA. ¡Qué avances desde mis primeras aproximaciones a principios de los años 80 con bases de reglas en lógica difusa, luego a finales de los 80 cuando desarrollaba mis primeras redes neuronales con algunas capas y menos de mil neuronas!
+
+Hoy las IA tienen poderes inimaginables que habrá que domar.
+
+Antiguo informático jubilado, tomé hace menos de una semana a Claude de Anthropic como «compañero de viaje»… ¡y fue un impacto! A partir de especificaciones funcionales y técnicas a veces sumarias y de descripciones ergonómicas textuales, tras unas treinta horas de diálogo, obtuve una aplicación ciertamente perfectible pero que me habría llevado meses de trabajo… ¡El mundo de los informáticos está viviendo una revolución «copernicana»!
+
+Las IA son herramientas formidables, pero van a sacudir el mundo del trabajo en todos los ámbitos, incluso en las ciencias exactas — habrá que ser capaz de canalizarlas y detectar sus derivas. Para la especie humana es una cuestión existencial.
+
+*En Saint-Herblain, 10/06/2026.*
+
+---
+
+**Contribuciones**
+
+Especificaciones funcionales, técnicas y ergonómicas — **Jean-Philippe BLANCHARD**
+
+Desarrollo de software — **Claude Sonnet 4.6** & **Claude Code 2.1.170** — Anthropic
 
 ---
 
@@ -735,11 +763,25 @@ Solo los satélites sobre el horizonte son visibles en los gráficos.
 
 ---
 
-**功能规格**
-Jean-Philippe Blanchard
+这个项目源于对天文学的热情。几年前，这种热情促使我在Arduino上用C语言编写计算太阳和月亮星历的函数，使用了Benoît和Pierre BECKER等人的近似算法，后来进一步在Python中使用基于Jean MEEUS工作的库，其成果记载于他的著作《供爱好者使用的天文计算》中。
 
-**软件开发**
-Claude Sonnet 4.6 — Anthropic
+几周前，我重新对人工智能产生了兴趣。自80年代初接触模糊逻辑规则库，到80年代末开发只有几层和不到一千个神经元的第一批神经网络以来，进步是何等巨大！
+
+如今，人工智能拥有难以想象的力量，需要加以驾驭。
+
+作为一名退休的计算机工程师，不到一周前，我将Anthropic的Claude作为「旅途伴侣」……震撼随之而来！从有时简略的功能和技术规格以及文字性的人机工程描述出发，经过约三十小时的对话，我获得了一个固然有待完善、但若靠自己需要数月才能完成的应用……计算机世界正在经历一场「哥白尼式」的革命！
+
+人工智能是强大的工具，但它们将颠覆包括硬科学在内所有领域的工作世界——我们必须能够引导它们并发现其偏差，这对人类来说是一个关乎存亡的问题。
+
+*于圣埃尔布兰，2026年6月10日。*
+
+---
+
+**贡献**
+
+功能、技术和人机工程规格 — **Jean-Philippe BLANCHARD**
+
+软件开发 — **Claude Sonnet 4.6** & **Claude Code 2.1.170** — Anthropic
 
 ---
 
@@ -909,11 +951,25 @@ Skyfield · JPL DE440s 历书
 
 ---
 
-**कार्यात्मक विशिष्टताएं**
-Jean-Philippe Blanchard
+इस परियोजना के मूल में खगोल विज्ञान के प्रति एक जुनून है जिसने मुझे कुछ साल पहले Arduino पर C में सूर्य और चंद्रमा की पंचांग गणना के लिए फ़ंक्शन प्रोग्राम करने के लिए प्रेरित किया, Benoît और Pierre BECKER के सन्निकटन एल्गोरिदम का उपयोग करते हुए, फिर Python में Jean MEEUS के कार्यों पर आधारित लाइब्रेरी का उपयोग करके आगे बढ़ा।
 
-**सॉफ्टवेयर विकास**
-Claude Sonnet 4.6 — Anthropic
+कुछ हफ्ते पहले मैंने फिर से AI में रुचि लेना शुरू किया। 80 के दशक की शुरुआत में फजी लॉजिक नियम आधारों से लेकर 80 के दशक के अंत में कुछ परतों और एक हजार से कम न्यूरॉन्स वाले पहले तंत्रिका नेटवर्क विकसित करने तक — कितनी प्रगति!
+
+आज AI के पास अकल्पनीय शक्तियाँ हैं जिन्हें नियंत्रित करना होगा।
+
+एक सेवानिवृत्त कंप्यूटर वैज्ञानिक के रूप में, मैंने एक हफ्ते से भी कम पहले Anthropic के Claude को अपना «सहयात्री» बनाया… और यह एक सदमा था! कभी-कभी संक्षिप्त कार्यात्मक और तकनीकी विशिष्टताओं और पाठ्य एर्गोनोमिक विवरणों से शुरू होकर, लगभग तीस घंटों के संवाद के बाद, मुझे एक ऐसा एप्लिकेशन मिला जो निश्चित रूप से सुधार योग्य है लेकिन जिसे अकेले बनाने में महीनों लगते… कंप्यूटर की दुनिया सचमुच एक «कोपर्निकन» क्रांति से गुजर रही है!
+
+AI शानदार उपकरण हैं, लेकिन वे कठिन विज्ञान सहित सभी क्षेत्रों में कार्य जगत को बाधित करेंगे — हमें उन्हें नियंत्रित करने और उनके विचलन का पता लगाने में सक्षम होना होगा। यह मानव जाति के लिए एक अस्तित्वगत प्रश्न है।
+
+*सेंट-हर्बलेन में, 10/06/2026।*
+
+---
+
+**योगदान**
+
+कार्यात्मक, तकनीकी और एर्गोनोमिक विशिष्टताएं — **Jean-Philippe BLANCHARD**
+
+सॉफ्टवेयर विकास — **Claude Sonnet 4.6** & **Claude Code 2.1.170** — Anthropic
 
 ---
 
