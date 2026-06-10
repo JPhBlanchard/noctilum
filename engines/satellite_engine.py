@@ -1,7 +1,7 @@
 """
 Moteur satellite — TLE depuis Celestrak, trajectoires via Skyfield.
 
-Données cachées dans data/tle_<groupe>.txt, rafraîchies toutes les 6 heures.
+Données cachées dans data/tle_<groupe>.txt, rafraîchies toutes les 24 heures.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ GROUPS: dict[str, str] = {
 }
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
-_CACHE_TTL_H = 6   # heures avant de retélécharger
+_CACHE_TTL_H = 24  # heures avant de retélécharger
 _DL_TIMEOUT  = 8   # secondes
 
 
