@@ -24,7 +24,7 @@ _resize_trigger = _components.declare_component(
 from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
-from engines.i18n import t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs
+from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
 
@@ -150,7 +150,7 @@ _DEFAULTS: dict = {
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
 _STATE_VERSION = "4.0-i18n"
-if st.session_state.get("_noctilum_v") != _STATE_VERSION:
+if st.session_state.ge_t("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
     st.session_state["_noctilum_v"] = _STATE_VERSION
@@ -171,14 +171,14 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    st.title(t("settings_title"))
+    st.title(_t("settings_title"))
     st.divider()
 
     # ── Lieu d'observation ──
-    st.subheader(t("section_location"))
+    st.subheader(_t("section_location"))
 
     # ── Carte interactive ──
-    with st.expander(t("map_picker"), expanded=False):
+    with st.expander(_t("map_picker"), expanded=False):
 
         def _reverse_geocode(lat: float, lon: float) -> str:
             try:
@@ -188,11 +188,11 @@ with st.sidebar:
                     headers={"User-Agent": "NOCTILUM/1.0"},
                     timeout=6,
                 ).json()
-                addr = r.get("address", {})
+                addr = r.ge_t("address", {})
                 return (
-                    addr.get("city") or addr.get("town") or addr.get("village")
-                    or addr.get("county")
-                    or r.get("display_name", "").split(",")[0] or ""
+                    addr.ge_t("city") or addr.ge_t("town") or addr.ge_t("village")
+                    or addr.ge_t("county")
+                    or r.ge_t("display_name", "").spli_t(",")[0] or ""
                 )
             except Exception:
                 return ""
@@ -204,7 +204,7 @@ with st.sidebar:
                     params={"latitude": lat, "longitude": lon},
                     timeout=5,
                 ).json()
-                val = r.get("elevation", [None])[0]
+                val = r.ge_t("elevation", [None])[0]
                 return max(0, int(round(val))) if val is not None else 0
             except Exception:
                 return 0
@@ -214,7 +214,7 @@ with st.sidebar:
         with search_col:
             search_q = st.text_input(
                 "Lieu",
-                value=st.session_state.get("place_label", ""),
+                value=st.session_state.ge_t("place_label", ""),
                 placeholder="Paris, Londres, Tokyo…",
                 label_visibility="collapsed",
             )
@@ -236,15 +236,15 @@ with st.sidebar:
                     st.session_state.lon         = _slon
                     st.session_state.elev        = _get_elevation(_slat, _slon)
                     st.session_state.place_label = (
-                        geo[0].get("display_name", "").split(",")[0].strip()
+                        geo[0].ge_t("display_name", "").spli_t(",")[0].strip()
                         or search_q.strip().title()
                     )
                     # Pas de st.rerun() : le clic sur 🔍 est déjà une interaction
                     # widget qui déclenche un rerun complet naturellement.
                 else:
-                    st.caption(t("place_not_found"))
+                    st.caption(_t("place_not_found"))
             except Exception:
-                st.caption(t("geocode_error"))
+                st.caption(_t("geocode_error"))
 
         # Carte Folium (tuiles sombres CartoDB, sans attribution Leaflet)
         _clat = float(st.session_state.lat)
@@ -275,12 +275,12 @@ with st.sidebar:
             returned_objects=["last_clicked"],
             key="folium_map",
         )
-        _clicked = (_result or {}).get("last_clicked")
+        _clicked = (_result or {}).ge_t("last_clicked")
         if _clicked:
             _nlat = round(_clicked["lat"], 4)
             _nlon = round(_clicked["lng"], 4)
             _click_id = (_nlat, _nlon)
-            if _click_id != st.session_state.get("_last_click_id"):
+            if _click_id != st.session_state.ge_t("_last_click_id"):
                 st.session_state._last_click_id = _click_id
                 st.session_state.lat         = _nlat
                 st.session_state.lon         = _nlon
@@ -290,21 +290,21 @@ with st.sidebar:
 
     _cl, _cm, _cr = st.columns(3)
     with _cl:
-        lat = st.number_input("Lat °N", key="lat", min_value=-90.0, max_value=90.0,
+        lat = st.number_inpu_t("Lat °N", key="lat", min_value=-90.0, max_value=90.0,
                               step=0.0001, format="%.4f")
     with _cm:
-        lon = st.number_input("Lon °E", key="lon", min_value=-180.0, max_value=180.0,
+        lon = st.number_inpu_t("Lon °E", key="lon", min_value=-180.0, max_value=180.0,
                               step=0.0001, format="%.4f")
     with _cr:
-        elev = st.number_input("Alt m", key="elev", min_value=0, max_value=8848,
+        elev = st.number_inpu_t("Alt m", key="elev", min_value=0, max_value=8848,
                                step=1, format="%d")
 
-    st.button(t("btn_refresh"))
+    st.button(_t("btn_refresh"))
     st.divider()
 
     # ── Date & Heure ──
-    st.subheader(t("section_datetime"))
-    realtime = st.checkbox(t("realtime_label"), key="realtime")
+    st.subheader(_t("section_datetime"))
+    realtime = st.checkbox(_t("realtime_label"), key="realtime")
 
     now_utc = datetime.now(timezone.utc)
 
@@ -312,15 +312,15 @@ with st.sidebar:
     time_mode = st.radio(
         "ref",
         ["UTC", "Locale"],
-        format_func=lambda x: x if x == "UTC" else t("time_local_option"),
+        format_func=lambda x: x if x == "UTC" else _t("time_local_option"),
         horizontal=True,
         key="time_mode",
         label_visibility="collapsed",
     )
 
     # Fuseau du lieu courant (utilisé si mode Locale)
-    _cur_lat = float(st.session_state.get("lat", 48.8362))
-    _cur_lon = float(st.session_state.get("lon",  2.3362))
+    _cur_lat = float(st.session_state.ge_t("lat", 48.8362))
+    _cur_lon = float(st.session_state.ge_t("lon",  2.3362))
     from engines.time_engine import get_timezone_name as _get_tz, local_datetime as _to_local
     from zoneinfo import ZoneInfo as _ZoneInfo
     _tz_name = _get_tz(_cur_lat, _cur_lon)
@@ -335,7 +335,7 @@ with st.sidebar:
             st.caption(f"{_tz_name} : {_now_local.strftime('%Y-%m-%d  %H:%M:%S %Z')}")
     else:
         # Détection du changement de mode UTC ↔ Locale
-        _prev_mode = st.session_state.get("_prev_time_mode", "UTC")
+        _prev_mode = st.session_state.ge_t("_prev_time_mode", "UTC")
         if _prev_mode != time_mode:
             if time_mode == "Locale":
                 # Passage UTC → Locale : convertir les valeurs UTC stockées en local
@@ -359,8 +359,8 @@ with st.sidebar:
 
         if time_mode == "UTC":
             # Clés UTC — obs_date/obs_time contiennent toujours du temps UTC
-            obs_date = st.date_input(t("date_utc"), key="obs_date")
-            obs_time = st.time_input(t("time_utc"), key="obs_time", step=60)
+            obs_date = st.date_input(_t("date_utc"), key="obs_date")
+            obs_time = st.time_input(_t("time_utc"), key="obs_time", step=60)
             obs_dt = datetime.combine(obs_date, obs_time, tzinfo=timezone.utc)
         else:
             # Clés séparées — obs_date_loc/obs_time_loc contiennent l'heure locale
@@ -375,7 +375,7 @@ with st.sidebar:
     st.divider()
 
     # ── Étoiles ──
-    st.subheader(t("section_stars"))
+    st.subheader(_t("section_stars"))
 
     import engines.hipparcos_catalog as _hip
     _hip_ok = _hip.is_available()
@@ -391,25 +391,25 @@ with st.sidebar:
     _use_hipparcos = cat_choice.startswith("Hipparcos")
 
     if not _hip_ok:
-        if st.button(t("btn_download_hip")):
-            _prog = st.progress(0.0, text=t("downloading"))
+        if st.button(_t("btn_download_hip")):
+            _prog = st.progress(0.0, text=_t("downloading"))
             try:
                 _hip.download(progress_cb=lambda f: _prog.progress(f, text=f"{t('downloading')} {f*100:.0f}%"))
                 _prog.empty()
-                st.success(t("hip_downloaded"))
+                st.success(_t("hip_downloaded"))
             except Exception as _e:
                 _prog.empty()
-                st.error(t("error_prefix", e=_e))
+                st.error(_t("error_prefix", e=_e))
 
     _max_mag = 12.0 if _use_hipparcos else 8.0
-    _default_mag = min(st.session_state.get("mag_limit_val", 5.0), _max_mag)
+    _default_mag = min(st.session_state.ge_t("mag_limit_val", 5.0), _max_mag)
     mag_limit = st.slider(
-        t("mag_limit_label"),
+        _t("mag_limit_label"),
         min_value=1.0,
         max_value=_max_mag,
         value=_default_mag,
         step=0.5,
-        help=t("mag_help") + (t("mag_help_eyepiece") if _use_hipparcos else ""),
+        help=_t("mag_help") + (_t("mag_help_eyepiece") if _use_hipparcos else ""),
         key="mag_limit_slider",
     )
     st.session_state["mag_limit_val"] = mag_limit
@@ -417,36 +417,36 @@ with st.sidebar:
     st.divider()
 
     # ── Vue ──
-    st.subheader(t("section_view"))
+    st.subheader(_t("section_view"))
     _VIEW_OPTS = ["🌌 Zénith", "🌄 Paysage", "🔭 Oculaire"]
     view_mode = st.radio(
         "view",
         _VIEW_OPTS,
         format_func=lambda x: {
-            "🌌 Zénith": t("view_zenith"),
-            "🌄 Paysage": t("view_landscape"),
-            "🔭 Oculaire": t("view_eyepiece"),
+            "🌌 Zénith": _t("view_zenith"),
+            "🌄 Paysage": _t("view_landscape"),
+            "🔭 Oculaire": _t("view_eyepiece"),
         }[x],
         horizontal=True,
         key="view_mode",
         label_visibility="collapsed",
     )
     if view_mode == "🌄 Paysage":
-        az_center = st.slider(t("direction_label"), 0, 359, key="az_center", format="%d°")
+        az_center = st.slider(_t("direction_label"), 0, 359, key="az_center", format="%d°")
         st.caption(f"↗ {az_center}° — {_az_to_compass(az_center)}")
     if view_mode == "🔭 Oculaire":
         # Grossissement max = 60° / diam_lunaire quand la Lune est la cible
-        _ep_target_now = st.session_state.get("_eyepiece_target")
+        _ep_target_now = st.session_state.ge_t("_eyepiece_target")
         _ep_label = getattr(_ep_target_now, "label", "") if _ep_target_now else ""
         _ep_label_l = _ep_label.lower()
         if "lune" in _ep_label_l or "moon" in _ep_label_l:
             _body_c = next(
-                (p for p in st.session_state.get("_planets_cache", [])
+                (p for p in st.session_state.ge_t("_planets_cache", [])
                  if p["name"] == "Lune"), None)
             _default_diam = 1842.0
         elif "soleil" in _ep_label_l or "sun" in _ep_label_l:
             _body_c = next(
-                (p for p in st.session_state.get("_planets_cache", [])
+                (p for p in st.session_state.ge_t("_planets_cache", [])
                  if p["name"] == "Soleil"), None)
             _default_diam = 1919.0
         else:
@@ -454,25 +454,25 @@ with st.sidebar:
             _default_diam = None
 
         if _default_diam is not None:
-            _diam_deg = ((_body_c.get("ang_diam_arcsec") or _default_diam) / 3600.0) if _body_c else (_default_diam / 3600.0)
+            _diam_deg = ((_body_c.ge_t("ang_diam_arcsec") or _default_diam) / 3600.0) if _body_c else (_default_diam / 3600.0)
             _max_gross = max(10, (int(60.0 / _diam_deg) // 5) * 5)
         else:
             _max_gross = 300
         # Verrouiller la valeur courante si elle dépasse le nouveau max
-        _cur_gross = int(st.session_state.get("eyepiece_gross", 80))
+        _cur_gross = int(st.session_state.ge_t("eyepiece_gross", 80))
         if _cur_gross > _max_gross:
             st.session_state["eyepiece_gross"] = _max_gross
-        _gross = st.slider(t("magnification_label"), 10, _max_gross,
+        _gross = st.slider(_t("magnification_label"), 10, _max_gross,
                            min(80, _max_gross), step=5,
                            key="eyepiece_gross", format="×%d")
         _fov_preview = 60.0 / _gross
-        st.caption(t("fov_caption", fov=_fov_preview))
-        st.text_input(t("search_object"), key="search_query",
+        st.caption(_t("fov_caption", fov=_fov_preview))
+        st.text_input(_t("search_object"), key="search_query",
                       placeholder="Sirius, M42, Andromède, Jupiter…")
-        _q = st.session_state.get("search_query", "").strip()
+        _q = st.session_state.ge_t("search_query", "").strip()
         if _q:
             from engines.search_catalog import search as _search
-            _cached_planets = st.session_state.get("_planets_cache", [])
+            _cached_planets = st.session_state.ge_t("_planets_cache", [])
             _results = _search(_q, _cached_planets)
             if _results:
                 _opts = [f"{r.label} — {r.description}" for r in _results]
@@ -480,31 +480,31 @@ with st.sidebar:
                                        label_visibility="collapsed")
                 st.session_state["_eyepiece_target"] = _results[_opts.index(_choice)]
             else:
-                st.caption(t("no_results"))
+                st.caption(_t("no_results"))
 
     st.divider()
 
     # ── Affichage ──
-    st.subheader(t("section_display"))
-    st.checkbox(t("show_stars_label"),           key="show_stars")
-    st.checkbox(t("show_planets_label"),         key="show_planets")
-    st.checkbox(t("show_milkyway_label"),        key="show_milkyway")
-    st.checkbox(t("show_const_lines_label"),     key="show_const_lines")
-    st.checkbox(t("show_const_names_label"),     key="show_const_names")
-    st.checkbox(t("show_const_bounds_label"),    key="show_const_bounds")
-    st.checkbox(t("show_ecliptic_label"),        key="show_ecliptic")
-    st.checkbox(t("show_grid_label"),            key="show_grid")
-    st.checkbox(t("show_messier_label"),         key="show_messier")
-    if st.session_state.get("show_messier"):
+    st.subheader(_t("section_display"))
+    st.checkbox(_t("show_stars_label"),           key="show_stars")
+    st.checkbox(_t("show_planets_label"),         key="show_planets")
+    st.checkbox(_t("show_milkyway_label"),        key="show_milkyway")
+    st.checkbox(_t("show_const_lines_label"),     key="show_const_lines")
+    st.checkbox(_t("show_const_names_label"),     key="show_const_names")
+    st.checkbox(_t("show_const_bounds_label"),    key="show_const_bounds")
+    st.checkbox(_t("show_ecliptic_label"),        key="show_ecliptic")
+    st.checkbox(_t("show_grid_label"),            key="show_grid")
+    st.checkbox(_t("show_messier_label"),         key="show_messier")
+    if st.session_state.ge_t("show_messier"):
         st.markdown(
             f"""
             <div style="font-size:11px; line-height:2; padding-left:22px; color:#999">
-              <span style="color:#FFB347; font-size:14px">○</span>&nbsp; {t("messier_galaxy")}<br>
-              <span style="color:#90EE90; font-size:14px">✳</span>&nbsp; {t("messier_open")}<br>
-              <span style="color:#7CFC00; font-size:14px">⊕</span>&nbsp; {t("messier_globular")}<br>
-              <span style="color:#87CEEB; font-size:14px">◇</span>&nbsp; {t("messier_nebula")}<br>
-              <span style="color:#DDA0DD; font-size:14px">⊙</span>&nbsp; {t("messier_planetary")}<br>
-              <span style="color:#FF7F7F; font-size:14px">△</span>&nbsp; {t("messier_snr")}
+              <span style="color:#FFB347; font-size:14px">○</span>&nbsp; {_t("messier_galaxy")}<br>
+              <span style="color:#90EE90; font-size:14px">✳</span>&nbsp; {_t("messier_open")}<br>
+              <span style="color:#7CFC00; font-size:14px">⊕</span>&nbsp; {_t("messier_globular")}<br>
+              <span style="color:#87CEEB; font-size:14px">◇</span>&nbsp; {_t("messier_nebula")}<br>
+              <span style="color:#DDA0DD; font-size:14px">⊙</span>&nbsp; {_t("messier_planetary")}<br>
+              <span style="color:#FF7F7F; font-size:14px">△</span>&nbsp; {_t("messier_snr")}
             </div>
             """,
             unsafe_allow_html=True,
@@ -513,20 +513,20 @@ with st.sidebar:
     st.divider()
 
     # ── Satellites ──
-    st.subheader(t("section_satellites"))
-    st.checkbox(t("show_satellites_label"), key="show_satellites")
-    if st.session_state.get("show_satellites"):
+    st.subheader(_t("section_satellites"))
+    st.checkbox(_t("show_satellites_label"), key="show_satellites")
+    if st.session_state.ge_t("show_satellites"):
         from engines.satellite_engine import GROUPS, list_satellites
         _sat_group = st.selectbox(
-            t("sat_group_label"), list(GROUPS.keys()),
+            _t("sat_group_label"), list(GROUPS.keys()),
             key="sat_group",
         )
         _sat_trail = st.slider(
-            t("sat_trail_label"), 1, 15, 5,
+            _t("sat_trail_label"), 1, 15, 5,
             key="sat_trail_min",
         )
         # Réinitialise la page si le groupe a changé
-        if st.session_state.get("_prev_sat_group") != _sat_group:
+        if st.session_state.ge_t("_prev_sat_group") != _sat_group:
             st.session_state["sat_page"] = 0
             st.session_state["_prev_sat_group"] = _sat_group
 
@@ -535,19 +535,19 @@ with st.sidebar:
         if _sat_names:
             _SAT_PAGE_SIZE = 200
             _sat_large = len(_sat_names) > _SAT_PAGE_SIZE
-            st.checkbox(t("sat_all_label"), key="sat_all")
-            _sat_use_all = st.session_state.get("sat_all", False)
+            st.checkbox(_t("sat_all_label"), key="sat_all")
+            _sat_use_all = st.session_state.ge_t("sat_all", False)
             if _sat_use_all:
                 if _sat_large:
                     _n_pages = (len(_sat_names) - 1) // _SAT_PAGE_SIZE + 1
-                    _page = int(st.session_state.get("sat_page", 0))
+                    _page = int(st.session_state.ge_t("sat_page", 0))
                     _page = max(0, min(_page, _n_pages - 1))
-                    st.caption(t("sat_page_info", n=len(_sat_names), p=_page+1, total=_n_pages))
+                    st.caption(_t("sat_page_info", n=len(_sat_names), p=_page+1, total=_n_pages))
                     _c1, _c2 = st.columns(2)
-                    if _c1.button(t("sat_prev_btn"), disabled=_page == 0, use_container_width=True):
+                    if _c1.button(_t("sat_prev_btn"), disabled=_page == 0, use_container_width=True):
                         st.session_state["sat_page"] = _page - 1
                         st.rerun()
-                    if _c2.button(t("sat_next_btn"), disabled=_page == _n_pages - 1, use_container_width=True):
+                    if _c2.button(_t("sat_next_btn"), disabled=_page == _n_pages - 1, use_container_width=True):
                         st.session_state["sat_page"] = _page + 1
                         st.rerun()
                     _sat_selected = _sat_names[
@@ -557,14 +557,14 @@ with st.sidebar:
                     _sat_selected = _sat_names
             else:
                 _sat_selected = st.multiselect(
-                    t("sat_selection_label"),
+                    _t("sat_selection_label"),
                     _sat_names,
                     default=[],
                     key="sat_selected",
-                    placeholder=t("sat_placeholder"),
+                    placeholder=_t("sat_placeholder"),
                 )
         else:
-            st.caption(t("sat_load_error"))
+            st.caption(_t("sat_load_error"))
             _sat_selected = []
     else:
         _sat_selected = []
@@ -591,12 +591,12 @@ try:
         )
 
         # Satellites
-        _show_sat = bool(st.session_state.get("show_satellites", False))
+        _show_sat = bool(st.session_state.ge_t("show_satellites", False))
         _sat_data = []
         if _show_sat and _sat_selected:
             from engines.satellite_engine import get_satellites_data
-            _sat_group_key = st.session_state.get("sat_group", "ISS / Stations")
-            _sat_trail_min = float(st.session_state.get("sat_trail_min", 5))
+            _sat_group_key = st.session_state.ge_t("sat_group", "ISS / Stations")
+            _sat_trail_min = float(st.session_state.ge_t("sat_trail_min", 5))
             _sat_data = get_satellites_data(
                 observer, t,
                 group=_sat_group_key,
@@ -620,25 +620,25 @@ try:
         # Mettre en cache les planètes pour la recherche (sidebar rendu avant calcul)
         st.session_state["_planets_cache"] = [
             {"name": p["name"], "alt": p["alt"], "az": p["az"],
-             "magnitude": p.get("magnitude"), "above_horizon": p.get("above_horizon", True),
-             "ang_diam_arcsec": p.get("ang_diam_arcsec"),
-             "distance_au": p.get("distance_au"),
-             "ring_B_deg": p.get("ring_B_deg"),
-             "ring_P_deg": p.get("ring_P_deg"),
-             "parallactic_angle_deg": p.get("parallactic_angle_deg")}
+             "magnitude": p.ge_t("magnitude"), "above_horizon": p.ge_t("above_horizon", True),
+             "ang_diam_arcsec": p.ge_t("ang_diam_arcsec"),
+             "distance_au": p.ge_t("distance_au"),
+             "ring_B_deg": p.ge_t("ring_B_deg"),
+             "ring_P_deg": p.ge_t("ring_P_deg"),
+             "parallactic_angle_deg": p.ge_t("parallactic_angle_deg")}
             for p in planets_data
         ]
 
-        _view      = st.session_state.get("view_mode", "🌌 Zénith")
+        _view      = st.session_state.ge_t("view_mode", "🌌 Zénith")
         _is_horizon  = _view == "🌄 Paysage"
         _is_eyepiece = _view == "🔭 Oculaire"
-        _az_center   = int(st.session_state.get("az_center", 180))
+        _az_center   = int(st.session_state.ge_t("az_center", 180))
 
         if _is_eyepiece:
             from engines.search_catalog import resolve_target
-            _gross  = float(st.session_state.get("eyepiece_gross", 80))
+            _gross  = float(st.session_state.ge_t("eyepiece_gross", 80))
             _fov    = 60.0 / _gross     # champ réel (60° champ apparent standard)
-            _target = st.session_state.get("_eyepiece_target")
+            _target = st.session_state.ge_t("_eyepiece_target")
             _ep_mag = max(mag_limit, 8.0) if _use_hipparcos else 8.0
             if _use_hipparcos:
                 _stars_ep = _hip.get_visible(observer, t, mag_limit=_ep_mag, min_alt=-_fov / 2)
@@ -646,7 +646,7 @@ try:
                 _stars_ep = catalog.get_visible(observer, t, mag_limit=_ep_mag, min_alt=-_fov / 2)
             _messier_ep = (
                 get_messier_visible(observer, t)
-                if _display_options.get("show_messier") else None
+                if _display_options.ge_t("show_messier") else None
             )
             if _target is None:
                 _alt_ep, _az_ep, _lbl_ep = 90.0, 0.0, "Zénith"
@@ -731,7 +731,7 @@ with col_chart:
             )
     except Exception as _fig_exc:
         import traceback as _tb
-        st.error(t("render_error", e=_fig_exc))
+        st.error(_t("render_error", e=_fig_exc))
         st.code(_tb.format_exc())
 
     if sky_fig is not None:
@@ -748,8 +748,8 @@ with col_chart:
             config={"displayModeBar": False, "scrollZoom": _is_eyepiece},
             key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
-    with st.popover(t("about_btn"), use_container_width=False):
-        st.markdown(t("about_text"))
+    with st.popover(_t("about_btn"), use_container_width=False):
+        st.markdown(_t("about_text"))
 
 # ── Tableau éphémérides ──
 with col_table:
@@ -760,8 +760,8 @@ with col_table:
     )
 
     tab_temps, tab_eph, tab_coord, tab_ecl, tab_moon, tab_conj, tab_crep = st.tabs([
-        t("tab_temps"), t("tab_eph"), t("tab_coord"), t("tab_ecl"),
-        t("tab_moon"), t("tab_conj"), t("tab_crep"),
+        _t("tab_temps"), _t("tab_eph"), _t("tab_coord"), _t("tab_ecl"),
+        _t("tab_moon"), _t("tab_conj"), _t("tab_crep"),
     ])
 
     with tab_eph:
@@ -774,27 +774,27 @@ with col_table:
                       else "🌙" if body["name"] == "Lune"
                       else "⬤")
             mag    = body["magnitude"]
-            elong  = body.get("elongation")
+            elong  = body.ge_t("elongation")
 
             main_rows.append({
-                t("col_body"):    prefix + icon + " " + tr_body(body["name"]),
+                _t("col_body"):    prefix + icon + " " + tr_body(body["name"]),
                 "Alt":            f"{body['alt']:+.1f}°",
                 "Az":             f"{body['az']:.1f}°",
                 "Mag":            f"{mag:.1f}" if mag is not None else "—",
-                t("col_rise"):    body["rise"],
-                t("col_transit"): body.get("transit", "—"),
-                t("col_set"):     body["set"],
-                t("col_elong"):   f"{elong:.0f}°" if elong is not None else "—",
+                _t("col_rise"):    body["rise"],
+                _t("col_transit"): body.ge_t("transit", "—"),
+                _t("col_set"):     body["set"],
+                _t("col_elong"):   f"{elong:.0f}°" if elong is not None else "—",
             })
 
-            dist   = body.get("distance_au")
-            diam   = body.get("ang_diam_arcsec")
-            illum  = body.get("illumination")
+            dist   = body.ge_t("distance_au")
+            diam   = body.ge_t("ang_diam_arcsec")
+            illum  = body.ge_t("illumination")
             detail_rows.append({
-                t("col_body"):   icon + " " + tr_body(body["name"]),
-                t("col_dist"):   f"{dist:.4f}" if dist is not None else "—",
-                t("col_diam"):   f"{diam:.1f}\"" if diam is not None else "—",
-                t("col_phase"):  f"{illum:.1f}" if illum is not None else "—",
+                _t("col_body"):   icon + " " + tr_body(body["name"]),
+                _t("col_dist"):   f"{dist:.4f}" if dist is not None else "—",
+                _t("col_diam"):   f"{diam:.1f}\"" if diam is not None else "—",
+                _t("col_phase"):  f"{illum:.1f}" if illum is not None else "—",
             })
 
         st.dataframe(
@@ -804,7 +804,7 @@ with col_table:
             height=374,
         )
 
-        st.caption(t("caption_detail"))
+        st.caption(_t("caption_detail"))
         st.dataframe(
             pd.DataFrame(detail_rows),
             use_container_width=True,
@@ -845,7 +845,7 @@ with col_table:
         _solar, _lunar = _cached_eclipses()
 
         # ── Solaires ──────────────────────────────────────────────────
-        st.markdown(t("solar_eclipses_title"))
+        st.markdown(_t("solar_eclipses_title"))
         _TYPE_ICON = {
             "Totale": "⬛", "Annulaire": "🔴", "Hybride": "🟠",
             "Partielle": "🌗", "Partielle (rasante)": "🌘",
@@ -854,17 +854,17 @@ with col_table:
             _sol_rows = []
             for e in _solar:
                 _sol_rows.append({
-                    t("col_date"): e.dt_max.strftime("%Y-%m-%d"),
-                    t("col_time"): e.dt_max.strftime("%H:%M") + " UTC",
-                    t("col_type"): _TYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
+                    _t("col_date"): e.dt_max.strftime("%Y-%m-%d"),
+                    _t("col_time"): e.dt_max.strftime("%H:%M") + " UTC",
+                    _t("col_type"): _TYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
                 })
             st.dataframe(pd.DataFrame(_sol_rows), use_container_width=True,
                          hide_index=True)
         else:
-            st.caption(t("no_solar_eclipse"))
+            st.caption(_t("no_solar_eclipse"))
 
         # ── Lunaires ──────────────────────────────────────────────────
-        st.markdown(t("lunar_eclipses_title"))
+        st.markdown(_t("lunar_eclipses_title"))
         _LTYPE_ICON = {"Totale": "🔴", "Partielle": "🌗", "Pénombrale": "🌑"}
         if _lunar:
             _lun_rows = []
@@ -872,17 +872,17 @@ with col_table:
                 tot = (f"{int(e.totality_min)} min"
                        if e.totality_min is not None else "—")
                 _lun_rows.append({
-                    t("col_date"):     e.dt_max.strftime("%Y-%m-%d"),
-                    t("col_time"):     e.dt_max.strftime("%H:%M") + " UTC",
-                    t("col_type"):     _LTYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
-                    t("col_totality"): tot,
+                    _t("col_date"):     e.dt_max.strftime("%Y-%m-%d"),
+                    _t("col_time"):     e.dt_max.strftime("%H:%M") + " UTC",
+                    _t("col_type"):     _LTYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
+                    _t("col_totality"): tot,
                 })
             st.dataframe(pd.DataFrame(_lun_rows), use_container_width=True,
                          hide_index=True)
         else:
-            st.caption(t("no_lunar_eclipse"))
+            st.caption(_t("no_lunar_eclipse"))
 
-        st.caption(t("eclipse_caption"))
+        st.caption(_t("eclipse_caption"))
 
     with tab_moon:
         from engines.moon_engine import (
@@ -904,7 +904,7 @@ with col_table:
         _col_img, _col_info = st.columns([1, 1], gap="small")
         with _col_img:
             st.image(_moon_png, width=300)
-            st.caption(t("moon_zenith_caption"))
+            st.caption(_t("moon_zenith_caption"))
         with _col_info:
             st.markdown(
                 f"""
@@ -916,9 +916,9 @@ with col_table:
                         {_mi['icon']}&nbsp; {tr_phase(_mi['phase_name'])}
                     </div>
                     <div style="color:#6677aa; font-size:0.88rem; line-height:1.9;">
-                        {t("moon_illumination")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['illumination']:.1f}&nbsp;%</b><br>
-                        {t("moon_age")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['age_days']:.1f}&nbsp;j</b><br>
-                        {t("moon_elong")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['elong_deg']:.1f}°</b>
+                        {_t("moon_illumination")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['illumination']:.1f}&nbsp;%</b><br>
+                        {_t("moon_age")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['age_days']:.1f}&nbsp;j</b><br>
+                        {_t("moon_elong")}&nbsp;&nbsp;<b style="color:#99aacc">{_mi['elong_deg']:.1f}°</b>
                     </div>
                 </div>
                 """,
@@ -929,18 +929,18 @@ with col_table:
         @st.cache_data(ttl=1800, show_spinner=False)
         def _c_phases(_day: str) -> list:
             from datetime import date
-            y, mo, d = [int(x) for x in _day.split("-")]
+            y, mo, d = [int(x) for x in _day.spli_t("-")]
             t0 = datetime(y, mo, d, tzinfo=timezone.utc)
             return _find_moon_phases(t0, months=3)
 
         _phases = _c_phases(t.strftime("%Y-%m-%d"))
         if _phases:
-            st.caption(t("phases_caption"))
+            st.caption(_t("phases_caption"))
             st.dataframe(
                 pd.DataFrame([
-                    {t("col_phase_name"): f"{p.icon} {tr_phase(p.name)}",
-                     t("col_date"):       p.dt.strftime("%Y-%m-%d"),
-                     t("col_utc"):        p.dt.strftime("%H:%M")}
+                    {_t("col_phase_name"): f"{p.icon} {tr_phase(p.name)}",
+                     _t("col_date"):       p.dt.strftime("%Y-%m-%d"),
+                     _t("col_utc"):        p.dt.strftime("%H:%M")}
                     for p in _phases
                 ]),
                 use_container_width=True,
@@ -955,24 +955,24 @@ with col_table:
 
         @st.cache_data(ttl=3600, show_spinner=True)
         def _c_conj(_day: str) -> list:
-            y, mo, d = [int(x) for x in _day.split("-")]
+            y, mo, d = [int(x) for x in _day.spli_t("-")]
             t0 = datetime(y, mo, d, tzinfo=timezone.utc)
             return _find_conjunctions(t0)
 
         _conjs = _c_conj(t.strftime("%Y-%m-%d"))
         if _conjs:
-            st.caption(t("conj_caption"))
+            st.caption(_t("conj_caption"))
             st.dataframe(
                 pd.DataFrame([
                     {
-                        t("col_date"):   e.dt.strftime("%Y-%m-%d"),
-                        t("col_utc"):    e.dt.strftime("%H:%M"),
-                        t("col_bodies"): (
+                        _t("col_date"):   e.dt.strftime("%Y-%m-%d"),
+                        _t("col_utc"):    e.dt.strftime("%H:%M"),
+                        _t("col_bodies"): (
                             f"{_PLANET_ICONS.get(e.body1,'⬤')} {tr_body(e.body1)}"
                             "  ·  "
                             f"{_PLANET_ICONS.get(e.body2,'⬤')} {tr_body(e.body2)}"
                         ),
-                        t("col_sep"):    f"{e.separation_deg:.1f}°",
+                        _t("col_sep"):    f"{e.separation_deg:.1f}°",
                     }
                     for e in _conjs
                 ]),
@@ -980,7 +980,7 @@ with col_table:
                 hide_index=True,
             )
         else:
-            st.caption(t("no_conj"))
+            st.caption(_t("no_conj"))
 
     with tab_temps:
         from engines.time_engine import equation_of_time_curve as _eot_curve, gmst_hours as _gmst_hours
@@ -1000,22 +1000,22 @@ with col_table:
 
         # ── Tableau des temps ──────────────────────────────────────────
         _time_rows = [
-            {t("col_quantity"): t("time_utc_row"),
-             t("col_value"):    ti.dt_utc.strftime("%Y-%m-%d  %H:%M:%S UTC")},
-            {t("col_quantity"): t("time_local_row", loc=_loc_label),
-             t("col_value"):    ti.dt_local.strftime("%Y-%m-%d  %H:%M:%S %Z")},
-            {t("col_quantity"): t("jd_utc_row"),
-             t("col_value"):    f"{ti.jd_utc:.6f}"},
-            {t("col_quantity"): t("jd_tt_row"),
-             t("col_value"):    f"{ti.jd_tt:.6f}"},
-            {t("col_quantity"): t("delta_t_row"),
-             t("col_value"):    f"{ti.delta_t_s:.2f} s"},
-            {t("col_quantity"): t("gmst_row"),
-             t("col_value"):    f"{int(ti.gmst_h):02d}h {int((ti.gmst_h % 1)*60):02d}m {int(((ti.gmst_h % 1)*60 % 1)*60):02d}s"},
-            {t("col_quantity"): t("lst_row"),
-             t("col_value"):    f"{tsl_h:02d}h {tsl_m:02d}m {tsl_s:02d}s"},
-            {t("col_quantity"): t("eot_row"),
-             t("col_value"):    f"{ti.eot_min:+.4f} min"},
+            {_t("col_quantity"): _t("time_utc_row"),
+             _t("col_value"):    ti.dt_utc.strftime("%Y-%m-%d  %H:%M:%S UTC")},
+            {_t("col_quantity"): _t("time_local_row", loc=_loc_label),
+             _t("col_value"):    ti.dt_local.strftime("%Y-%m-%d  %H:%M:%S %Z")},
+            {_t("col_quantity"): _t("jd_utc_row"),
+             _t("col_value"):    f"{ti.jd_utc:.6f}"},
+            {_t("col_quantity"): _t("jd_tt_row"),
+             _t("col_value"):    f"{ti.jd_tt:.6f}"},
+            {_t("col_quantity"): _t("delta_t_row"),
+             _t("col_value"):    f"{ti.delta_t_s:.2f} s"},
+            {_t("col_quantity"): _t("gmst_row"),
+             _t("col_value"):    f"{int(ti.gmst_h):02d}h {int((ti.gmst_h % 1)*60):02d}m {int(((ti.gmst_h % 1)*60 % 1)*60):02d}s"},
+            {_t("col_quantity"): _t("lst_row"),
+             _t("col_value"):    f"{tsl_h:02d}h {tsl_m:02d}m {tsl_s:02d}s"},
+            {_t("col_quantity"): _t("eot_row"),
+             _t("col_value"):    f"{ti.eot_min:+.4f} min"},
         ]
         st.dataframe(
             pd.DataFrame(_time_rows),
@@ -1043,7 +1043,7 @@ with col_table:
             fill="tozeroy",
             fillcolor="rgba(100, 150, 255, 0.12)",
             line=dict(color="#6699ff", width=1.5),
-            name=t("eot_row"),
+            name=_t("eot_row"),
             hovertemplate="%{x}<br>EoT : %{y:.2f} min<extra></extra>",
         ))
 
@@ -1058,7 +1058,7 @@ with col_table:
             text=[f"  {_marker_eot:+.2f} min"],
             textposition="top right",
             textfont=dict(color="#ffcc44", size=11),
-            name=t("eot_marker_label"),
+            name=_t("eot_marker_label"),
             hovertemplate=f"{_today_str}<br>EoT : {_marker_eot:.2f} min<extra></extra>",
         ))
 
@@ -1072,7 +1072,7 @@ with col_table:
 
         _fig_eot.update_layout(
             title=dict(
-                text=t("eot_chart_title", year=_year_sim),
+                text=_t("eot_chart_title", year=_year_sim),
                 font=dict(color="#8899ff", size=14),
                 x=0.5,
             ),
@@ -1090,7 +1090,7 @@ with col_table:
             yaxis=dict(
                 showgrid=True,
                 gridcolor="#111133",
-                title=t("eot_y_axis"),
+                title=_t("eot_y_axis"),
                 tickfont=dict(size=10),
                 zeroline=False,
             ),
@@ -1098,7 +1098,7 @@ with col_table:
             hovermode="x unified",
         )
         st.plotly_chart(_fig_eot, use_container_width=True, config={"displayModeBar": False})
-        st.caption(t("eot_caption"))
+        st.caption(_t("eot_caption"))
 
     with tab_crep:
         from engines.twilight_engine import get_solar_events as _get_solar, get_lunar_events as _get_lunar
@@ -1123,11 +1123,11 @@ with col_table:
             for ev in events:
                 if ev.dt_utc is None:
                     rows.append({
-                        t("col_event"):               tr_event(ev.label),
-                        t("col_utc"):                 "—",
-                        t("col_local_time", off=utc_offset_str): "—",
-                        t("col_azimuth"):             "—",
-                        t("col_altitude"):            "—",
+                        _t("col_event"):               tr_event(ev.label),
+                        _t("col_utc"):                 "—",
+                        _t("col_local_time", off=utc_offset_str): "—",
+                        _t("col_azimuth"):             "—",
+                        _t("col_altitude"):            "—",
                     })
                 else:
                     dt_loc = ev.dt_utc.astimezone(tz)
@@ -1135,33 +1135,33 @@ with col_table:
                     _is_transit = "méridien" in ev.label.lower() or "transit" in ev.label.lower()
                     alt_s = f"{ev.alt:+.1f}°" if ev.alt is not None and _is_transit else "—"
                     rows.append({
-                        t("col_event"):               tr_event(ev.label),
-                        t("col_utc"):                 ev.dt_utc.strftime("%H:%M"),
-                        t("col_local_time", off=utc_offset_str): dt_loc.strftime("%H:%M"),
-                        t("col_azimuth"):             az_s,
-                        t("col_altitude"):            alt_s,
+                        _t("col_event"):               tr_event(ev.label),
+                        _t("col_utc"):                 ev.dt_utc.strftime("%H:%M"),
+                        _t("col_local_time", off=utc_offset_str): dt_loc.strftime("%H:%M"),
+                        _t("col_azimuth"):             az_s,
+                        _t("col_altitude"):            alt_s,
                     })
             return rows
 
         _off = _ti.utc_offset
-        st.markdown(t("solar_events_title"))
+        st.markdown(_t("solar_events_title"))
         st.dataframe(
             pd.DataFrame(_fmt_event_rows(_solar_evts, _tz_crep, _off)),
             use_container_width=True,
             hide_index=True,
         )
-        st.markdown(t("lunar_events_title"))
+        st.markdown(_t("lunar_events_title"))
         st.dataframe(
             pd.DataFrame(_fmt_event_rows(_lunar_evts, _tz_crep, _off)),
             use_container_width=True,
             hide_index=True,
         )
-        st.caption(t("twilight_caption"))
+        st.caption(_t("twilight_caption"))
 
     # Résumé rapide (hors onglet)
     nb_visible_bodies = sum(1 for b in planets_data if b["above_horizon"])
     nb_total_bodies   = len(planets_data)
-    st.caption(t("summary_caption", n_stars=len(stars_df), mag=f"{mag_limit:.1f}",
+    st.caption(_t("summary_caption", n_stars=len(stars_df), mag=f"{mag_limit:.1f}",
                   n_vis=nb_visible_bodies, n_tot=nb_total_bodies))
 
 # ─── Rafraîchissement automatique (temps réel) ───────────────────────────────
