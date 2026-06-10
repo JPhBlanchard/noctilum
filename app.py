@@ -503,7 +503,7 @@ with col_tabs:
         _clicked = (_map_result or {}).get("last_clicked")
         if _clicked:
             _nlat = round(_clicked["lat"], 4)
-            _nlon = round(_clicked["lng"], 4)
+            _nlon = round(((float(_clicked["lng"]) + 180) % 360) - 180, 4)
             _cid  = (_nlat, _nlon)
             if _cid != st.session_state.get("_last_click_id"):
                 st.session_state._last_click_id = _cid
