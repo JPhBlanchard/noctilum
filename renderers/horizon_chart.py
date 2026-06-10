@@ -41,9 +41,10 @@ _PLANET_COLOR = {
 _SUN_CLR          = '#FFF5A0'
 _MOON_CLR         = '#E8E8D0'
 _LABEL_CLR        = '#FFFFFF'
-_CONST_LINE_COLOR  = 'rgba(80, 100, 180, 0.40)'
-_CONST_BOUND_COLOR = 'rgba(60,  80, 130, 0.22)'
+_CONST_LINE_COLOR  = 'rgba(100, 130, 220, 0.65)'
+_CONST_BOUND_COLOR = 'rgba(80,  110, 180, 0.45)'
 _ECLIPTIC_COLOR    = 'rgba(255, 210, 60, 0.55)'
+_ECLIPTIC_GRID_COLOR = 'rgba(255, 190, 40, 0.28)'
 _GRID_COLOR        = 'rgba(80, 120, 200, 0.55)'
 
 _PLANET_NAMES = frozenset(
@@ -311,7 +312,7 @@ def _constellation_lines_trace(
         return go.Scatter(
             x=xs, y=ys,
             mode='lines',
-            line=dict(color=_CONST_LINE_COLOR, width=0.8),
+            line=dict(color=_CONST_LINE_COLOR, width=1.0),
             hoverinfo='skip',
             showlegend=False,
         )
@@ -524,7 +525,7 @@ def _boundary_trace_h(
 
         return go.Scatter(
             x=xs, y=ys, mode='lines',
-            line=dict(color=_CONST_BOUND_COLOR, width=0.7, dash='dot'),
+            line=dict(color=_CONST_BOUND_COLOR, width=0.9, dash='dot'),
             hoverinfo='skip', showlegend=False,
         )
     except Exception:
@@ -580,6 +581,36 @@ def _grid_trace_h(
         return go.Scatter(
             x=xs_all, y=ys_all, mode='lines',
             line=dict(color=_GRID_COLOR, width=1.5),
+            hoverinfo='skip', showlegend=False,
+        )
+    except Exception:
+        return None
+
+
+def _ecliptic_grid_trace_h(
+    observer: Observer,
+    t,
+    az_center: float,
+    az_fov: float,
+    alt_min: float,
+    alt_max: float,
+    width: int,
+    height: int,
+) -> Optional[go.Scatter]:
+    try:
+        from engines.sky_overlay import get_ecliptic_grid_altaz
+        segments = get_ecliptic_grid_altaz(observer, t)
+        xs_all, ys_all = [], []
+        for alts, azs in segments:
+            xs, ys = _project_altaz_curve(alts, azs, az_center, az_fov, alt_min, alt_max, width, height)
+            if xs:
+                xs_all.extend(xs + [None])
+                ys_all.extend(ys + [None])
+        if not xs_all:
+            return None
+        return go.Scatter(
+            x=xs_all, y=ys_all, mode='lines',
+            line=dict(color=_ECLIPTIC_GRID_COLOR, width=0.7, dash='dot'),
             hoverinfo='skip', showlegend=False,
         )
     except Exception:
@@ -775,8 +806,9 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
     "show_const_lines":  True,
     "show_const_names":  True,
     "show_const_bounds": False,
-    "show_ecliptic":     False,
-    "show_grid":         False,
+    "show_ecliptic":      False,
+    "show_ecliptic_grid": False,
+    "show_grid":          False,
     "show_messier":      False,
     "show_milkyway":     False,
 }
@@ -993,6 +1025,11 @@ def build_horizon_chart(
 
     if opts['show_ecliptic']:
         tr = _ecliptic_trace_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height)
+        if tr is not None:
+            fig.add_trace(tr)
+
+    if opts.get('show_ecliptic_grid'):
+        tr = _ecliptic_grid_trace_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height)
         if tr is not None:
             fig.add_trace(tr)
 

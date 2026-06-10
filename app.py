@@ -126,9 +126,10 @@ _DEFAULTS: dict = {
     "show_const_lines":  True,
     "show_const_names":  True,
     "show_const_bounds": False,
-    "show_ecliptic":     False,
-    "show_grid":         False,
-    "show_messier":      False,
+    "show_ecliptic":      False,
+    "show_ecliptic_grid": False,
+    "show_grid":          False,
+    "show_messier":       False,
     "show_milkyway":     False,
     "show_satellites":   False,
     # Satellites
@@ -249,9 +250,10 @@ try:
             "show_const_lines":  bool(st.session_state.get("show_const_lines",  True)),
             "show_const_names":  bool(st.session_state.get("show_const_names",  True)),
             "show_const_bounds": bool(st.session_state.get("show_const_bounds", False)),
-            "show_ecliptic":     bool(st.session_state.get("show_ecliptic",     False)),
-            "show_grid":         bool(st.session_state.get("show_grid",         False)),
-            "show_messier":      bool(st.session_state.get("show_messier",      False)),
+            "show_ecliptic":      bool(st.session_state.get("show_ecliptic",      False)),
+            "show_ecliptic_grid": bool(st.session_state.get("show_ecliptic_grid", False)),
+            "show_grid":          bool(st.session_state.get("show_grid",          False)),
+            "show_messier":       bool(st.session_state.get("show_messier",       False)),
             "show_milkyway":     bool(st.session_state.get("show_milkyway",     False)),
             "show_satellites":   _show_sat,
         }
@@ -408,6 +410,9 @@ with col_chart:
             config={"displayModeBar": False, "scrollZoom": _is_eyepiece},
             key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
+
+    with st.popover(_t("about_btn")):
+        st.markdown(_t("about_text"))
 
 # ── Onglets (colonne droite) ──────────────────────────────────────────────────
 with col_tabs:
@@ -603,49 +608,54 @@ with col_tabs:
             st.checkbox(_t("show_const_names_label"),  key="show_const_names")
             st.checkbox(_t("show_const_bounds_label"), key="show_const_bounds")
             st.checkbox(_t("show_ecliptic_label"),     key="show_ecliptic")
+            st.checkbox(_t("show_ecliptic_grid_label"), key="show_ecliptic_grid")
             st.checkbox(_t("show_grid_label"),         key="show_grid")
-            st.checkbox(_t("show_messier_label"),      key="show_messier")
-            if st.session_state.get("show_messier"):
-                st.markdown(
-                    f"""<div style="font-size:11px;line-height:2;padding-left:20px;color:#999">
-                      <span style="color:#FFB347;font-size:14px">○</span>&nbsp;{_t("messier_galaxy")}<br>
-                      <span style="color:#90EE90;font-size:14px">✳</span>&nbsp;{_t("messier_open")}<br>
-                      <span style="color:#7CFC00;font-size:14px">⊕</span>&nbsp;{_t("messier_globular")}<br>
-                      <span style="color:#87CEEB;font-size:14px">◇</span>&nbsp;{_t("messier_nebula")}<br>
-                      <span style="color:#DDA0DD;font-size:14px">⊙</span>&nbsp;{_t("messier_planetary")}<br>
-                      <span style="color:#FF7F7F;font-size:14px">△</span>&nbsp;{_t("messier_snr")}
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
-            st.divider()
-            st.subheader(_t("section_satellites"))
-            st.checkbox(_t("show_satellites_label"), key="show_satellites")
-            if st.session_state.get("show_satellites"):
-                from engines.satellite_engine import GROUPS, list_satellites
-                _sat_g = st.selectbox(_t("sat_group_label"), list(GROUPS.keys()), key="sat_group")
-                st.slider(_t("sat_trail_label"), 1, 15, 5, key="sat_trail_min")
-                if st.session_state.get("_prev_sat_group") != _sat_g:
-                    st.session_state["sat_page"] = 0
-                    st.session_state["_prev_sat_group"] = _sat_g
-                with st.spinner("Chargement TLE…"):
-                    _sn = list_satellites(_sat_g)
-                if _sn:
-                    _sl = len(_sn) > 200
-                    st.checkbox(_t("sat_all_label"), key="sat_all")
-                    if st.session_state.get("sat_all") and _sl:
-                        _np = (len(_sn) - 1) // 200 + 1
-                        _pg2 = max(0, min(int(st.session_state.get("sat_page", 0)), _np - 1))
-                        st.caption(_t("sat_page_info", n=len(_sn), p=_pg2+1, total=_np))
-                        _bc1, _bc2 = st.columns(2)
-                        if _bc1.button(_t("sat_prev_btn"), disabled=_pg2 == 0, use_container_width=True):
-                            st.session_state["sat_page"] = _pg2 - 1; st.rerun()
-                        if _bc2.button(_t("sat_next_btn"), disabled=_pg2 == _np - 1, use_container_width=True):
-                            st.session_state["sat_page"] = _pg2 + 1; st.rerun()
-                    elif not st.session_state.get("sat_all"):
-                        st.multiselect(_t("sat_selection_label"), _sn, default=[],
-                                       key="sat_selected", placeholder=_t("sat_placeholder"))
-                else:
-                    st.caption(_t("sat_load_error"))
+
+        # ── Messier ──────────────────────────────────────────────────────────
+        st.divider()
+        st.checkbox(_t("show_messier_label"), key="show_messier")
+        if st.session_state.get("show_messier"):
+            st.markdown(
+                f"""<div style="font-size:11px;line-height:2;padding-left:20px;color:#999">
+                  <span style="color:#FFB347;font-size:14px">○</span>&nbsp;{_t("messier_galaxy")}<br>
+                  <span style="color:#90EE90;font-size:14px">✳</span>&nbsp;{_t("messier_open")}<br>
+                  <span style="color:#7CFC00;font-size:14px">⊕</span>&nbsp;{_t("messier_globular")}<br>
+                  <span style="color:#87CEEB;font-size:14px">◇</span>&nbsp;{_t("messier_nebula")}<br>
+                  <span style="color:#DDA0DD;font-size:14px">⊙</span>&nbsp;{_t("messier_planetary")}<br>
+                  <span style="color:#FF7F7F;font-size:14px">△</span>&nbsp;{_t("messier_snr")}
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+        # ── Satellites ───────────────────────────────────────────────────────
+        st.subheader(_t("section_satellites"))
+        st.checkbox(_t("show_satellites_label"), key="show_satellites")
+        if st.session_state.get("show_satellites"):
+            from engines.satellite_engine import GROUPS, list_satellites
+            _sat_g = st.selectbox(_t("sat_group_label"), list(GROUPS.keys()), key="sat_group")
+            st.slider(_t("sat_trail_label"), 1, 15, 5, key="sat_trail_min")
+            if st.session_state.get("_prev_sat_group") != _sat_g:
+                st.session_state["sat_page"] = 0
+                st.session_state["_prev_sat_group"] = _sat_g
+            with st.spinner("Chargement TLE…"):
+                _sn = list_satellites(_sat_g)
+            if _sn:
+                _sl = len(_sn) > 200
+                st.checkbox(_t("sat_all_label"), key="sat_all")
+                if st.session_state.get("sat_all") and _sl:
+                    _np = (len(_sn) - 1) // 200 + 1
+                    _pg2 = max(0, min(int(st.session_state.get("sat_page", 0)), _np - 1))
+                    st.caption(_t("sat_page_info", n=len(_sn), p=_pg2+1, total=_np))
+                    _bc1, _bc2 = st.columns(2)
+                    if _bc1.button(_t("sat_prev_btn"), disabled=_pg2 == 0, use_container_width=True):
+                        st.session_state["sat_page"] = _pg2 - 1; st.rerun()
+                    if _bc2.button(_t("sat_next_btn"), disabled=_pg2 == _np - 1, use_container_width=True):
+                        st.session_state["sat_page"] = _pg2 + 1; st.rerun()
+                elif not st.session_state.get("sat_all"):
+                    st.multiselect(_t("sat_selection_label"), _sn, default=[],
+                                   key="sat_selected", placeholder=_t("sat_placeholder"))
+            else:
+                st.caption(_t("sat_load_error"))
 
 
 

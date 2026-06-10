@@ -192,6 +192,86 @@ def get_ecliptic_altaz(
     return _project_points(ra_h, dec_d, obs, t_sky, 0, 0)
 
 
+def get_ecliptic_grid(
+    observer: Observer,
+    t=None,
+    width: int = 800,
+    height: int = 800,
+    lon_step: int = 30,
+    lat_step: int = 10,
+    lat_max: int = 30,
+) -> tuple[list, list]:
+    """Grille écliptique: méridiens de longitude (tous les lon_step°) et parallèles de latitude."""
+    eps = math.radians(_EPS_DEG)
+    all_ra: list[float] = []
+    all_dec: list[float] = []
+    segments: list[slice] = []
+
+    lat_pts = np.arange(-float(lat_max), float(lat_max) + 0.1, 2.0)
+    for lam_deg in range(0, 360, lon_step):
+        lam = math.radians(lam_deg)
+        beta_arr = np.radians(lat_pts)
+        ra_rad  = np.arctan2(np.sin(lam) * np.cos(eps) - np.tan(beta_arr) * np.sin(eps), np.cos(lam))
+        dec_rad = np.arcsin(np.sin(beta_arr) * np.cos(eps) + np.cos(beta_arr) * np.sin(eps) * np.sin(lam))
+        start = len(all_ra)
+        all_ra.extend((np.degrees(ra_rad) % 360.0 / 15.0).tolist())
+        all_dec.extend(np.degrees(dec_rad).tolist())
+        segments.append(slice(start, len(all_ra)))
+
+    lam_pts = np.arange(0.0, 361.0, 2.0)
+    for beta_deg in range(-lat_max, lat_max + 1, lat_step):
+        beta   = math.radians(beta_deg)
+        lam_arr = np.radians(lam_pts)
+        ra_rad  = np.arctan2(np.sin(lam_arr) * np.cos(eps) - math.tan(beta) * np.sin(eps), np.cos(lam_arr))
+        dec_rad = np.arcsin(math.sin(beta) * np.cos(eps) + math.cos(beta) * np.sin(eps) * np.sin(lam_arr))
+        start = len(all_ra)
+        all_ra.extend((np.degrees(ra_rad) % 360.0 / 15.0).tolist())
+        all_dec.extend(np.degrees(dec_rad).tolist())
+        segments.append(slice(start, len(all_ra)))
+
+    if not all_ra:
+        return [], []
+
+    eph   = _get_eph()
+    t_sky = _to_sky_time(t)
+    obs   = eph["earth"] + observer.skyfield_location()
+    alts, azs = _project_points(np.array(all_ra), np.array(all_dec), obs, t_sky, width, height)
+    return _altaz_to_plotly(alts, azs, width, height, segments)
+
+
+def get_ecliptic_grid_altaz(
+    observer: Observer,
+    t=None,
+    lon_step: int = 30,
+    lat_step: int = 10,
+    lat_max: int = 30,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Retourne une liste de (alts, azs) — un tableau par ligne de grille écliptique."""
+    eps   = math.radians(_EPS_DEG)
+    eph   = _get_eph()
+    t_sky = _to_sky_time(t)
+    obs   = eph["earth"] + observer.skyfield_location()
+    result = []
+
+    lat_pts = np.arange(-float(lat_max), float(lat_max) + 0.1, 2.0)
+    for lam_deg in range(0, 360, lon_step):
+        lam = math.radians(lam_deg)
+        beta_arr = np.radians(lat_pts)
+        ra_h  = (np.degrees(np.arctan2(np.sin(lam)*np.cos(eps) - np.tan(beta_arr)*np.sin(eps), np.cos(lam))) % 360.0) / 15.0
+        dec_d = np.degrees(np.arcsin(np.sin(beta_arr)*np.cos(eps) + np.cos(beta_arr)*np.sin(eps)*np.sin(lam)))
+        result.append(_project_points(ra_h, dec_d, obs, t_sky, 0, 0))
+
+    lam_pts = np.arange(0.0, 361.0, 2.0)
+    for beta_deg in range(-lat_max, lat_max + 1, lat_step):
+        beta    = math.radians(beta_deg)
+        lam_arr = np.radians(lam_pts)
+        ra_h    = (np.degrees(np.arctan2(np.sin(lam_arr)*np.cos(eps) - math.tan(beta)*np.sin(eps), np.cos(lam_arr))) % 360.0) / 15.0
+        dec_d   = np.degrees(np.arcsin(math.sin(beta)*np.cos(eps) + math.cos(beta)*np.sin(eps)*np.sin(lam_arr)))
+        result.append(_project_points(ra_h, dec_d, obs, t_sky, 0, 0))
+
+    return result
+
+
 def get_celestial_grid_altaz(
     observer: Observer,
     t=None,

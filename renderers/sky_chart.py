@@ -61,9 +61,10 @@ _PLANET_NAMES = frozenset(
     {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune', 'Pluton'}
 )
 
-_CONST_LINE_COLOR  = 'rgba(80, 100, 180, 0.35)'
-_CONST_BOUND_COLOR = 'rgba(60,  80, 130, 0.22)'
+_CONST_LINE_COLOR  = 'rgba(100, 130, 220, 0.65)'
+_CONST_BOUND_COLOR = 'rgba(80,  110, 180, 0.45)'
 _ECLIPTIC_COLOR    = 'rgba(255, 210, 60, 0.55)'
+_ECLIPTIC_GRID_COLOR = 'rgba(255, 190, 40, 0.28)'
 _GRID_COLOR        = 'rgba(80, 120, 200, 0.55)'
 
 # ---------------------------------------------------------------------------
@@ -179,7 +180,7 @@ def _constellation_trace(
         return go.Scatter(
             x=xs, y=ys,
             mode='lines',
-            line=dict(color=_CONST_LINE_COLOR, width=0.8),
+            line=dict(color=_CONST_LINE_COLOR, width=1.0),
             hoverinfo='skip',
             showlegend=False,
         )
@@ -229,7 +230,7 @@ def _boundary_trace(
         return go.Scatter(
             x=xs, y=ys,
             mode='lines',
-            line=dict(color=_CONST_BOUND_COLOR, width=0.7, dash='dot'),
+            line=dict(color=_CONST_BOUND_COLOR, width=0.9, dash='dot'),
             hoverinfo='skip',
             showlegend=False,
         )
@@ -253,6 +254,29 @@ def _ecliptic_trace(
             x=xs, y=ys,
             mode='lines',
             line=dict(color=_ECLIPTIC_COLOR, width=1.2),
+            hoverinfo='skip',
+            showlegend=False,
+        )
+    except Exception:
+        return None
+
+
+def _ecliptic_grid_trace(
+    observer: Observer,
+    t,
+    width: int,
+    height: int,
+) -> Optional[go.Scatter]:
+    """Grille de coordonnées écliptiques."""
+    try:
+        from engines.sky_overlay import get_ecliptic_grid
+        xs, ys = get_ecliptic_grid(observer, t, width, height)
+        if not xs:
+            return None
+        return go.Scatter(
+            x=xs, y=ys,
+            mode='lines',
+            line=dict(color=_ECLIPTIC_GRID_COLOR, width=0.7, dash='dot'),
             hoverinfo='skip',
             showlegend=False,
         )
@@ -528,9 +552,10 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
     "show_const_lines":  True,
     "show_const_names":  True,
     "show_const_bounds": False,
-    "show_ecliptic":     False,
-    "show_grid":         False,
-    "show_messier":      False,
+    "show_ecliptic":      False,
+    "show_ecliptic_grid": False,
+    "show_grid":          False,
+    "show_messier":       False,
     "show_milkyway":     False,
 }
 
@@ -894,6 +919,12 @@ def build_sky_chart(
     # Écliptique
     if opts["show_ecliptic"]:
         tr = _ecliptic_trace(observer, t, width, height)
+        if tr is not None:
+            fig.add_trace(tr)
+
+    # Grille écliptique
+    if opts.get("show_ecliptic_grid"):
+        tr = _ecliptic_grid_trace(observer, t, width, height)
         if tr is not None:
             fig.add_trace(tr)
 
