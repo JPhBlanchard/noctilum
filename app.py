@@ -191,7 +191,7 @@ _hip_ok        = _hip.is_available()
 _cat_choice    = st.session_state.get("star_catalog", "BSC5 (9 096 ★, mag ≤ 8)")
 _use_hipparcos = _cat_choice.startswith("Hipparcos")
 _max_mag       = 12.0 if _use_hipparcos else 8.0
-mag_limit      = float(min(st.session_state.get("mag_limit_val", 5.0), _max_mag))
+mag_limit      = float(min(st.session_state.get("mag_limit_slider", 5.0), _max_mag))
 
 # Sélection satellites
 _sat_selected = []
@@ -553,12 +553,10 @@ with col_tabs:
                         st.error(_t("error_prefix", e=_e))
             st.slider(
                 _t("mag_limit_label"), min_value=1.0, max_value=_max_mag,
-                value=float(min(st.session_state.get("mag_limit_val", 5.0), _max_mag)),
+                value=float(min(st.session_state.get("mag_limit_slider", 5.0), _max_mag)),
                 step=0.5, key="mag_limit_slider",
                 help=_t("mag_help") + (_t("mag_help_eyepiece") if _use_hipparcos else ""),
             )
-            st.session_state["mag_limit_val"] = st.session_state.get("mag_limit_slider", 5.0)
-
             if _is_eyepiece:
                 st.divider()
                 st.subheader(_t("section_view"))
