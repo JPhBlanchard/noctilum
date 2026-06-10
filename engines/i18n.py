@@ -1131,6 +1131,25 @@ def tr_eclipse_type(fr_type: str) -> str:
     return _ECLIPSE_TYPES.get(lang, {}).get(fr_type, fr_type)
 
 
+_MONTHS: dict[str, list[str]] = {
+    "fr": ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"],
+    "en": ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    "es": ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"],
+    "zh": ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
+    "hi": ["जन","फर","मार","अप्र","मई","जून","जुल","अग","सित","अक्त","नव","दिस"],
+}
+
+
 def compass_dirs() -> list[tuple[int, str]]:
     """Retourne les 16 points cardinaux pour la langue courante."""
     return _COMPASS.get(_lang(), _COMPASS["fr"])
+
+
+def cardinal_map() -> dict[int, str]:
+    """Retourne {angle: label} pour les 16 points cardinaux (langue courante)."""
+    return {angle: label for angle, label in compass_dirs()}
+
+
+def months() -> list[str]:
+    """Retourne les 12 abréviations de mois pour la langue courante."""
+    return _MONTHS.get(_lang(), _MONTHS["fr"])

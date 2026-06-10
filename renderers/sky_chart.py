@@ -15,6 +15,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from engines.astro_engine import Observer
+from engines.i18n import compass_dirs as _compass_dirs
 from engines.projection import (
     CHART_RADIUS,
     altaz_to_xy,
@@ -53,10 +54,8 @@ _LABEL_CLR     = '#FFFFFF'   # labels planètes
 _MARGIN_PX = 20          # doit correspondre à projection._MARGIN
 _PARALLELS  = (30, 60)   # altitudes des cercles de parallèles
 
-_CARDINALS = (
-    (0,   'N'),  (45,  'NE'), (90,  'E'),  (135, 'SE'),
-    (180, 'S'),  (225, 'SO'), (270, 'O'),  (315, 'NO'),
-)
+_CARDINAL8_ANGLES = (0, 45, 90, 135, 180, 225, 270, 315)
+_CARDINAL4_ANGLES = (0, 90, 180, 270)
 
 _PLANET_NAMES = frozenset(
     {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune', 'Pluton'}
@@ -129,12 +128,14 @@ def _make_annotations(cx: float, cy: float, chart_r: float) -> list[dict]:
     annotations: list[dict] = []
     label_r = chart_r + 18   # légèrement à l'extérieur de l'horizon
 
-    # Points cardinaux
-    for az_deg, label in _CARDINALS:
+    # Points cardinaux (langue courante)
+    _cmap = {angle: label for angle, label in _compass_dirs()}
+    for az_deg in _CARDINAL8_ANGLES:
+        label = _cmap.get(az_deg, str(az_deg))
         az_rad = math.radians(az_deg)
         x = cx + label_r * math.sin(az_rad)
         y = cy - label_r * math.cos(az_rad)
-        principal = label in ('N', 'E', 'S', 'O')
+        principal = az_deg in _CARDINAL4_ANGLES
         annotations.append(dict(
             x=x, y=y,
             text=f'<b>{label}</b>' if principal else label,

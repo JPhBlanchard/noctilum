@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from engines.astro_engine import Observer
+from engines.i18n import cardinal_map as _cardinal_map
 from engines.projection import magnitude_to_opacity, magnitude_to_size
 from engines.star_catalog import spectral_color
 
@@ -49,12 +50,6 @@ _PLANET_NAMES = frozenset(
     {'Mercure', 'Vénus', 'Mars', 'Jupiter', 'Saturne', 'Uranus', 'Neptune', 'Pluton'}
 )
 
-_CARDINAL_MAP = {
-    0: 'N', 30: 'NNE', 45: 'NE', 60: 'ENE',
-    90: 'E', 120: 'ESE', 135: 'SE', 150: 'SSE',
-    180: 'S', 210: 'SSO', 225: 'SO', 240: 'OSO',
-    270: 'O', 300: 'ONO', 315: 'NO', 330: 'NNO',
-}
 
 # ---------------------------------------------------------------------------
 # Projection équirectangulaire
@@ -164,7 +159,7 @@ def _make_annotations(
     az_cur = math.ceil(az_left / az_step) * az_step
     while az_cur <= az_center + az_fov / 2:
         az_mod = int(az_cur % 360)
-        label = _CARDINAL_MAP.get(az_mod, f'{az_mod}°')
+        label = _cardinal_map().get(az_mod, f'{az_mod}°')
         x_tick = (az_cur - az_left) / az_fov * width
         if 0 <= x_tick <= width:
             annotations.append(dict(

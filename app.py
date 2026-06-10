@@ -24,7 +24,7 @@ _resize_trigger = _components.declare_component(
 from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
-from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs
+from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs, months as _months
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
 
@@ -475,7 +475,7 @@ with st.sidebar:
             _cached_planets = st.session_state.get("_planets_cache", [])
             _results = _search(_q, _cached_planets)
             if _results:
-                _opts = [f"{r.label} — {r.description}" for r in _results]
+                _opts = [f"{tr_body(r.label)} — {r.description}" for r in _results]
                 _choice = st.selectbox("", _opts, key="search_choice",
                                        label_visibility="collapsed")
                 st.session_state["_eyepiece_target"] = _results[_opts.index(_choice)]
@@ -1084,7 +1084,8 @@ with col_table:
             xaxis=dict(
                 showgrid=True,
                 gridcolor="#111133",
-                tickformat="%b",
+                tickvals=[f"{_year_sim}-{m:02d}-01" for m in range(1, 13)],
+                ticktext=_months(),
                 tickfont=dict(size=10),
             ),
             yaxis=dict(
