@@ -30,7 +30,20 @@ GROUPS: dict[str, str] = {
     "GPS":             "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
 }
 
-_DATA_DIR = Path(__file__).parent.parent / "data"
+def _writable_data_dir() -> Path:
+    candidate = Path(__file__).parent.parent / "data"
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+        test = candidate / ".write_test"
+        test.touch(); test.unlink()
+        return candidate
+    except (PermissionError, OSError):
+        import tempfile
+        p = Path(tempfile.gettempdir()) / "noctilum_data"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+_DATA_DIR = _writable_data_dir()
 _CACHE_TTL_H = 6   # heures avant de retélécharger
 _DL_TIMEOUT  = 8   # secondes
 
@@ -108,10 +121,7 @@ def _parse_tle(text: str) -> dict[str, tuple[str, str]]:
 
 def list_satellites(group: str) -> list[str]:
     """Liste les noms de satellites disponibles pour un groupe."""
-    try:
-        return sorted(_parse_tle(_load_tle_text(group)).keys())
-    except Exception:
-        return []
+    return sorted(_parse_tle(_load_tle_text(group)).keys())
 
 
 def get_satellites_data(

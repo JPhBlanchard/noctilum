@@ -636,7 +636,11 @@ with col_tabs:
                 st.session_state["sat_page"] = 0
                 st.session_state["_prev_sat_group"] = _sat_g
             with st.spinner("Chargement TLE…"):
-                _sn = list_satellites(_sat_g)
+                try:
+                    _sn = list_satellites(_sat_g)
+                except Exception as _tle_err:
+                    st.error(f"TLE error: {type(_tle_err).__name__}: {_tle_err}")
+                    _sn = []
             if _sn:
                 _sl = len(_sn) > 200
                 st.checkbox(_t("sat_all_label"), key="sat_all")
