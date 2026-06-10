@@ -1,0 +1,8 @@
+mirror-to-github:
+  stage: deploy
+  image: alpine/git:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - git remote add github https://${GITHUB_TOKEN}@github.com/JPhBlanchard/noctilum.git
+    - git push github HEAD:main --force
