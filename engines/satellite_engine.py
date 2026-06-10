@@ -7,8 +7,6 @@ Données cachées dans data/tle_<groupe>.txt, rafraîchies toutes les 6 heures.
 from __future__ import annotations
 
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -63,18 +61,17 @@ def _tle_fresh(path: Path) -> bool:
 
 
 def _fetch_tle(group: str) -> str:
+    import requests as _req
     url = GROUPS[group]
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; Noctilum/1.0)"})
-    try:
-        with urllib.request.urlopen(req, timeout=_DL_TIMEOUT) as resp:
-            body = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        # Celestrak retourne 403 quand les données n'ont pas changé depuis le dernier dl
-        body = exc.read().decode("utf-8", errors="replace")
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; Noctilum/1.0)"}
+    resp = _req.get(url, headers=headers, timeout=_DL_TIMEOUT)
+    if resp.status_code == 403:
+        body = resp.text
         if "not updated" in body or "GP data has not" in body:
-            raise _NotUpdatedError() from exc
-        raise
-    return body
+            raise _NotUpdatedError()
+        resp.raise_for_status()
+    resp.raise_for_status()
+    return resp.text
 
 
 class _NotUpdatedError(Exception):
