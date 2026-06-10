@@ -147,7 +147,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "4.0-i18n"
+_STATE_VERSION = "5.0-notabs"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
