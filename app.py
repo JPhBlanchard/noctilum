@@ -638,8 +638,7 @@ with col_tabs:
             with st.spinner("Chargement TLE…"):
                 try:
                     _sn = list_satellites(_sat_g)
-                except Exception as _tle_err:
-                    st.error(f"TLE error: {type(_tle_err).__name__}: {_tle_err}")
+                except Exception:
                     _sn = []
             if _sn:
                 _sl = len(_sn) > 200
