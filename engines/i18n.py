@@ -195,11 +195,25 @@ _T: dict[str, dict[str, str]] = {
 
 ---
 
-**Spécifications fonctionnelles**
-Jean-Philippe Blanchard
+À l'origine de ce projet une passion de l'astronomie qui m'a amené il y a quelques années à programmer sur Arduino en C des fonctions permettant de calculer les éphémérides du soleil et de la lune, par des algorithmes d'approximations comme ceux de Benoit et Pierre BECKER, puis aller plus loin en Python en utilisant les bibliothèques s'appuyant sur les travaux de Jean MEEUS, décrits dans son ouvrage *Calculs astronomiques à l'usage des amateurs* publié par la Société Astronomique de France.
 
-**Développement logiciel**
-Claude Sonnet 4.6 — Anthropic
+Et puis il y a quelques semaines j'ai commencé à m'intéresser à nouveau à l'IA. Que de progrès depuis mes premières approches au début des années 80 avec des bases de règles en logique floue, puis à la fin des années 80 où je développais mes premiers réseaux de neurones avec quelques couches et moins d'un millier de neurones !
+
+Aujourd'hui les IA ont des puissances inimaginables qu'il va falloir dompter.
+
+Ancien informaticien à la retraite, j'ai donc pris il y a moins d'une semaine comme « compagnon de route » Claude d'Anthropic… et là ce fut le choc ! À partir de spécifications fonctionnelles et techniques parfois sommaires et de descriptions ergonomiques textuelles, au bout d'une trentaine d'heures de dialogue, j'ai obtenu une application certes perfectible mais qui m'aurait demandé des mois de travail… Décidément le monde des informaticiens est en train de vivre une révolution « copernicienne » !
+
+Les IA sont donc des outils formidables, mais ils vont chambouler le monde du travail dans tous les domaines y compris dans les sciences dures, mais il va falloir être capable de les canaliser et de détecter leurs dérives, c'est pour l'espèce humaine une question existentielle.
+
+*À Saint-Herblain, le 10/06/2026.*
+
+---
+
+**Contributions**
+
+Spécifications fonctionnelles, techniques et ergonomiques — **Jean-Philippe BLANCHARD**
+
+Développement logiciel — **Claude Sonnet 4.6** & **Claude Code 2.1.170** — Anthropic
 
 ---
 
