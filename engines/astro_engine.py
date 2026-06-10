@@ -41,14 +41,12 @@ def _get_loader() -> Loader:
 
 
 def _get_eph():
-    """Charge de440s.bsp depuis data/ via load_file (retourne un SpiceKernel)."""
+    """Charge de440s.bsp (télécharge automatiquement si absent)."""
     global _eph
     if _eph is None:
         if not _BSP_PATH.exists():
-            raise FileNotFoundError(
-                f"Fichier introuvable : {_BSP_PATH}\n"
-                "Télécharge de440s.bsp et place-le dans data/."
-            )
+            from engines.data_download import download as _dl
+            _dl("de440s.bsp")
         _eph = load_file(str(_BSP_PATH))
     return _eph
 

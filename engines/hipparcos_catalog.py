@@ -31,34 +31,11 @@ def is_available() -> bool:
 
 
 def download(progress_cb: Optional[Callable[[float], None]] = None) -> None:
-    """
-    Télécharge hip_main.dat depuis CDS-VizieR.
-    progress_cb(fraction) est appelé toutes les 512 Ko (0.0 → 1.0).
-    """
-    _DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = _HIP_PATH.with_suffix(".tmp")
-
-    req = urllib.request.Request(
-        _HIP_URL,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; Noctilum/1.0)"},
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        chunk = 512 * 1024
-        with open(tmp, "wb") as f:
-            while True:
-                buf = resp.read(chunk)
-                if not buf:
-                    break
-                f.write(buf)
-                downloaded += len(buf)
-                if progress_cb and total:
-                    progress_cb(min(downloaded / total, 1.0))
-
-    tmp.rename(_HIP_PATH)
+    """Télécharge hip_main.dat (GitLab release en priorité, CDS en repli)."""
+    from engines.data_download import download as _dl
+    _dl("hip_main.dat", progress_cb=progress_cb)
     global _cache_df
-    _cache_df = None  # invalide le cache après téléchargement
+    _cache_df = None
 
 
 def load() -> pd.DataFrame:

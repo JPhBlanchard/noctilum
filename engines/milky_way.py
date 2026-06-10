@@ -34,11 +34,8 @@ def _load_texture() -> np.ndarray:
         return _texture
 
     if not _IMG_PATH.exists():
-        import requests
-        _DATA_DIR.mkdir(parents=True, exist_ok=True)
-        resp = requests.get(_IMG_URL, timeout=60)
-        resp.raise_for_status()
-        _IMG_PATH.write_bytes(resp.content)
+        from engines.data_download import download as _dl
+        _dl("milkyway.png")
 
     from PIL import Image
     img      = Image.open(_IMG_PATH).convert("RGBA")

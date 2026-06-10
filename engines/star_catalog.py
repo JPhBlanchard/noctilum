@@ -97,13 +97,6 @@ class StarCatalog:
     # Téléchargement & chargement
     # ------------------------------------------------------------------
 
-    def _download(self) -> None:
-        """Télécharge bsc5-all.json et le stocke dans data/bsc5.json."""
-        CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        response = requests.get(CATALOG_URL, timeout=30)
-        response.raise_for_status()
-        CATALOG_PATH.write_bytes(response.content)
-
     def load(self) -> pd.DataFrame:
         """
         Retourne le DataFrame complet du catalogue BSC5.
@@ -115,7 +108,8 @@ class StarCatalog:
             return self._df
 
         if not CATALOG_PATH.exists():
-            self._download()
+            from engines.data_download import download as _dl
+            _dl("bsc5.json")
 
         with CATALOG_PATH.open(encoding="utf-8") as fh:
             raw: list[dict] = json.load(fh)

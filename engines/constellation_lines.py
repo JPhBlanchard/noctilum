@@ -60,10 +60,8 @@ def _ra_deg_to_hours(ra_deg: float) -> float:
 # ---------------------------------------------------------------------------
 
 def _fetch(url: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    path.write_bytes(resp.content)
+    from engines.data_download import download as _dl
+    _dl(path.name)
 
 
 def _load_pairs() -> list[tuple[tuple[float, float], tuple[float, float]]]:
