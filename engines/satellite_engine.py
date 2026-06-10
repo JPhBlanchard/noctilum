@@ -28,20 +28,7 @@ GROUPS: dict[str, str] = {
     "GPS":             "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle",
 }
 
-def _writable_data_dir() -> Path:
-    candidate = Path(__file__).parent.parent / "data"
-    try:
-        candidate.mkdir(parents=True, exist_ok=True)
-        test = candidate / ".write_test"
-        test.touch(); test.unlink()
-        return candidate
-    except (PermissionError, OSError):
-        import tempfile
-        p = Path(tempfile.gettempdir()) / "noctilum_data"
-        p.mkdir(parents=True, exist_ok=True)
-        return p
-
-_DATA_DIR = _writable_data_dir()
+_DATA_DIR = Path(__file__).parent.parent / "data"
 _CACHE_TTL_H = 6   # heures avant de retélécharger
 _DL_TIMEOUT  = 8   # secondes
 
@@ -83,17 +70,21 @@ def _load_tle_text(group: str) -> str:
     if not _tle_fresh(path):
         try:
             text = _fetch_tle(group)
-            _DATA_DIR.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
         except _NotUpdatedError:
-            # Données inchangées selon Celestrak — garder le cache existant même s'il est vieux
             if path.exists():
                 return path.read_text(encoding="utf-8")
-            raise RuntimeError(f"Aucun cache local pour '{group}' et Celestrak indique que les données n'ont pas changé.")
+            raise RuntimeError(f"Aucun cache local pour '{group}'.")
         except Exception:
             if path.exists():
                 return path.read_text(encoding="utf-8")
             raise
+        # Écriture du cache — optionnelle si filesystem en lecture seule
+        try:
+            _DATA_DIR.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        except (PermissionError, OSError):
+            pass
+        return text
     return path.read_text(encoding="utf-8")
 
 
