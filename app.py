@@ -142,6 +142,8 @@ _DEFAULTS: dict = {
     "sat_trail_min": 5,
     "sat_selected":  [],
     "sat_all":       False,
+    "sat_page":      0,
+    "_prev_sat_group": "ISS / Stations",
     # Vue
     "view_mode": "🔭 Zénith",
     "az_center": 180,
@@ -149,7 +151,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.8-sat-all"
+_STATE_VERSION = "3.9-sat-page"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -506,11 +508,16 @@ with st.sidebar:
             "Trajectoire (±min)", 1, 15, 5,
             key="sat_trail_min",
         )
+        # Réinitialise la page si le groupe a changé
+        if st.session_state.get("_prev_sat_group") != _sat_group:
+            st.session_state["sat_page"] = 0
+            st.session_state["_prev_sat_group"] = _sat_group
+
         with st.spinner("Chargement TLE…"):
             _sat_names = list_satellites(_sat_group)
         if _sat_names:
-            _SAT_ALL_CAP = 200
-            _sat_large = len(_sat_names) > _SAT_ALL_CAP
+            _SAT_PAGE_SIZE = 200
+            _sat_large = len(_sat_names) > _SAT_PAGE_SIZE
             st.checkbox(
                 "Tous les satellites du groupe",
                 key="sat_all",
@@ -518,20 +525,31 @@ with st.sidebar:
             _sat_use_all = st.session_state.get("sat_all", False)
             if _sat_use_all:
                 if _sat_large:
+                    _n_pages = (len(_sat_names) - 1) // _SAT_PAGE_SIZE + 1
+                    _page = int(st.session_state.get("sat_page", 0))
+                    _page = max(0, min(_page, _n_pages - 1))
                     st.caption(
-                        f"⚠ Groupe volumineux ({len(_sat_names)} satellites) — "
-                        f"limité aux {_SAT_ALL_CAP} premiers pour les performances."
+                        f"{len(_sat_names)} satellites · page {_page + 1}/{_n_pages}"
                     )
-                    _sat_selected = _sat_names[:_SAT_ALL_CAP]
+                    _c1, _c2 = st.columns(2)
+                    if _c1.button("◀ Préc.", disabled=_page == 0, use_container_width=True):
+                        st.session_state["sat_page"] = _page - 1
+                        st.rerun()
+                    if _c2.button("Suiv. ▶", disabled=_page == _n_pages - 1, use_container_width=True):
+                        st.session_state["sat_page"] = _page + 1
+                        st.rerun()
+                    _sat_selected = _sat_names[
+                        _page * _SAT_PAGE_SIZE : (_page + 1) * _SAT_PAGE_SIZE
+                    ]
                 else:
                     _sat_selected = _sat_names
             else:
                 _sat_selected = st.multiselect(
                     "Satellites",
                     _sat_names,
-                    default=_sat_names[:1],
+                    default=[],
                     key="sat_selected",
-                    placeholder="Choisir…",
+                    placeholder="Choisir… (vide = aucun)",
                 )
         else:
             st.caption("Impossible de charger les TLE.")
