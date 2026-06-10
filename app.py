@@ -141,6 +141,7 @@ _DEFAULTS: dict = {
     "sat_group":     "ISS / Stations",
     "sat_trail_min": 5,
     "sat_selected":  [],
+    "sat_all":       False,
     # Vue
     "view_mode": "🔭 Zénith",
     "az_center": 180,
@@ -148,7 +149,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "3.7-clock"
+_STATE_VERSION = "3.8-sat-all"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -508,13 +509,30 @@ with st.sidebar:
         with st.spinner("Chargement TLE…"):
             _sat_names = list_satellites(_sat_group)
         if _sat_names:
-            _sat_selected = st.multiselect(
-                "Satellites",
-                _sat_names,
-                default=_sat_names[:1],
-                key="sat_selected",
-                placeholder="Choisir…",
+            _SAT_ALL_CAP = 200
+            _sat_large = len(_sat_names) > _SAT_ALL_CAP
+            st.checkbox(
+                "Tous les satellites du groupe",
+                key="sat_all",
             )
+            _sat_use_all = st.session_state.get("sat_all", False)
+            if _sat_use_all:
+                if _sat_large:
+                    st.caption(
+                        f"⚠ Groupe volumineux ({len(_sat_names)} satellites) — "
+                        f"limité aux {_SAT_ALL_CAP} premiers pour les performances."
+                    )
+                    _sat_selected = _sat_names[:_SAT_ALL_CAP]
+                else:
+                    _sat_selected = _sat_names
+            else:
+                _sat_selected = st.multiselect(
+                    "Satellites",
+                    _sat_names,
+                    default=_sat_names[:1],
+                    key="sat_selected",
+                    placeholder="Choisir…",
+                )
         else:
             st.caption("Impossible de charger les TLE.")
             _sat_selected = []
@@ -545,15 +563,14 @@ try:
         # Satellites
         _show_sat = bool(st.session_state.get("show_satellites", False))
         _sat_data = []
-        _sat_selected_calc = st.session_state.get("sat_selected", [])
-        if _show_sat and _sat_selected_calc:
+        if _show_sat and _sat_selected:
             from engines.satellite_engine import get_satellites_data
             _sat_group_key = st.session_state.get("sat_group", "ISS / Stations")
             _sat_trail_min = float(st.session_state.get("sat_trail_min", 5))
             _sat_data = get_satellites_data(
                 observer, t,
                 group=_sat_group_key,
-                selected=_sat_selected_calc,
+                selected=_sat_selected,
                 trail_min=_sat_trail_min,
             )
 
