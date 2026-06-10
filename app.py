@@ -226,7 +226,7 @@ try:
             stars_df = catalog.get_visible(observer, t, mag_limit=float(mag_limit))
         messier_df   = (
             get_messier_visible(observer, t)
-            if st.session_state.show_messier else None
+            if st.session_state.get("show_messier", False) else None
         )
 
         # Satellites
@@ -244,15 +244,15 @@ try:
             )
 
         _display_options = {
-            "show_stars":        bool(st.session_state.show_stars),
-            "show_planets":      bool(st.session_state.show_planets),
-            "show_const_lines":  bool(st.session_state.show_const_lines),
-            "show_const_names":  bool(st.session_state.show_const_names),
-            "show_const_bounds": bool(st.session_state.show_const_bounds),
-            "show_ecliptic":     bool(st.session_state.show_ecliptic),
-            "show_grid":         bool(st.session_state.show_grid),
-            "show_messier":      bool(st.session_state.show_messier),
-            "show_milkyway":     bool(st.session_state.show_milkyway),
+            "show_stars":        bool(st.session_state.get("show_stars",        True)),
+            "show_planets":      bool(st.session_state.get("show_planets",      True)),
+            "show_const_lines":  bool(st.session_state.get("show_const_lines",  True)),
+            "show_const_names":  bool(st.session_state.get("show_const_names",  True)),
+            "show_const_bounds": bool(st.session_state.get("show_const_bounds", False)),
+            "show_ecliptic":     bool(st.session_state.get("show_ecliptic",     False)),
+            "show_grid":         bool(st.session_state.get("show_grid",         False)),
+            "show_messier":      bool(st.session_state.get("show_messier",      False)),
+            "show_milkyway":     bool(st.session_state.get("show_milkyway",     False)),
             "show_satellites":   _show_sat,
         }
 
