@@ -130,8 +130,11 @@ _DEFAULTS: dict = {
     "show_ecliptic_grid": False,
     "show_grid":          False,
     "show_messier":       False,
-    "show_milkyway":     False,
-    "show_satellites":   False,
+    "show_milkyway":          False,
+    "show_milkyway_guide":    False,
+    "show_galactic_points":   False,
+    "show_ecliptic_points":   False,
+    "show_satellites":        False,
     # Satellites
     "sat_group":     "ISS / Stations",
     "sat_trail_min": 5,
@@ -148,7 +151,7 @@ _DEFAULTS: dict = {
     "_last_click_id":    None,
 }
 # Version d'état — changer cette valeur force une réinitialisation complète
-_STATE_VERSION = "5.0-notabs"
+_STATE_VERSION = "5.1-mwguide"
 if st.session_state.get("_noctilum_v") != _STATE_VERSION:
     for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
@@ -254,8 +257,11 @@ try:
             "show_ecliptic_grid": bool(st.session_state.get("show_ecliptic_grid", False)),
             "show_grid":          bool(st.session_state.get("show_grid",          False)),
             "show_messier":       bool(st.session_state.get("show_messier",       False)),
-            "show_milkyway":     bool(st.session_state.get("show_milkyway",     False)),
-            "show_satellites":   _show_sat,
+            "show_milkyway":          bool(st.session_state.get("show_milkyway",          False)),
+            "show_milkyway_guide":    bool(st.session_state.get("show_milkyway_guide",    False)),
+            "show_galactic_points":   bool(st.session_state.get("show_galactic_points",   False)),
+            "show_ecliptic_points":   bool(st.session_state.get("show_ecliptic_points",   False)),
+            "show_satellites":        _show_sat,
         }
 
         # Mettre en cache les planètes pour la recherche (sidebar rendu avant calcul)
@@ -386,6 +392,7 @@ with col_chart:
                 stars_df, planets_data, observer, t,
                 az_center=float(_az_center), messier_df=messier_df,
                 options=_display_options, satellites_data=_sat_data,
+                lang=st.session_state.get("lang", "fr"),
             )
         else:
             from renderers.sky_chart import build_sky_chart
@@ -393,6 +400,7 @@ with col_chart:
                 stars_df, planets_data, observer, t,
                 messier_df=messier_df, options=_display_options,
                 satellites_data=_sat_data,
+                lang=st.session_state.get("lang", "fr"),
             )
     except Exception as _fig_exc:
         import traceback as _tb
@@ -407,7 +415,7 @@ with col_chart:
         st.plotly_chart(
             sky_fig,
             width="stretch",
-            config={"displayModeBar": False, "scrollZoom": _is_eyepiece},
+            config={"displayModeBar": False, "scrollZoom": True},
             key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
 
@@ -482,6 +490,7 @@ with col_tabs:
                         _geo[0].get("display_name", "").split(",")[0].strip()
                         or _search_q.strip().title()
                     )
+                    st.session_state["_pending_rerun"] = True
                 else:
                     st.caption(_t("place_not_found"))
             except Exception:
@@ -516,7 +525,7 @@ with col_tabs:
                 st.session_state.lon         = _nlon
                 st.session_state.elev        = _get_elevation(_nlat, _nlon)
                 st.session_state.place_label = _reverse_geocode(_nlat, _nlon) or f"{_nlat:.4f}°, {_nlon:.4f}°"
-                st.rerun()
+                st.session_state["_pending_rerun"] = True
 
         _lc3, _lc4, _lc5 = st.columns(3)
         with _lc3:
@@ -601,7 +610,10 @@ with col_tabs:
             st.subheader(_t("section_display"))
             st.checkbox(_t("show_stars_label"),        key="show_stars")
             st.checkbox(_t("show_planets_label"),      key="show_planets")
-            st.checkbox(_t("show_milkyway_label"),     key="show_milkyway")
+            st.checkbox(_t("show_milkyway_label"),           key="show_milkyway")
+            st.checkbox(_t("show_milkyway_guide_label"),     key="show_milkyway_guide")
+            st.checkbox(_t("show_galactic_points_label"),    key="show_galactic_points")
+            st.checkbox(_t("show_ecliptic_points_label"),    key="show_ecliptic_points")
             st.checkbox(_t("show_const_lines_label"),  key="show_const_lines")
             st.checkbox(_t("show_const_names_label"),  key="show_const_names")
             st.checkbox(_t("show_const_bounds_label"), key="show_const_bounds")
@@ -1112,4 +1124,11 @@ with col_tabs:
 
 if realtime:
     time.sleep(30)
+    st.rerun()
+
+# Rerun différé pour les changements de lieu (geocodeur / clic carte)
+# Appelé ICI (après tous les widgets) pour éviter que le nettoyage des widgets
+# "orphelins" n'efface les états des cases à cocher (show_milkyway, etc.)
+if st.session_state.get("_pending_rerun"):
+    del st.session_state["_pending_rerun"]
     st.rerun()

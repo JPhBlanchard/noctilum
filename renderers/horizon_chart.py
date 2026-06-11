@@ -736,6 +736,106 @@ def _milkyway_traces_h(
         return []
 
 
+def _galactic_points_traces_h(
+    observer, t,
+    az_center: float, az_fov: float,
+    alt_min: float, alt_max: float,
+    width: int, height: int,
+) -> list[go.Scatter]:
+    """Points de référence galactiques (centre, anticentre, pôles) — vue paysage."""
+    try:
+        from engines.milky_way import get_galactic_points_altaz
+        traces = []
+        for pt in get_galactic_points_altaz(observer, t):
+            xy = _project(pt["alt"], pt["az"], az_center, az_fov, alt_min, alt_max, width, height)
+            if xy is None:
+                continue
+            traces.append(go.Scatter(
+                x=[xy[0]], y=[xy[1]],
+                mode="markers+text",
+                marker=dict(symbol="circle", size=pt["size"],
+                            color="rgba(0,0,0,0)", opacity=0),
+                text=[pt["symbol"]],
+                textfont=dict(size=pt["size"], color=pt["color"]),
+                textposition="middle center",
+                hovertemplate=(
+                    f"{pt['label']}<br>"
+                    f"Alt {pt['alt']:.1f}°  Az {pt['az']:.1f}°<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+        return traces
+    except Exception:
+        return []
+
+
+def _ecliptic_points_traces_h(
+    observer, t,
+    az_center: float, az_fov: float,
+    alt_min: float, alt_max: float,
+    width: int, height: int,
+) -> list[go.Scatter]:
+    """Points cardinaux écliptiques (équinoxes, solstices) — vue paysage."""
+    try:
+        from engines.sky_overlay import get_ecliptic_points_altaz
+        traces = []
+        for pt in get_ecliptic_points_altaz(observer, t):
+            xy = _project(pt["alt"], pt["az"], az_center, az_fov, alt_min, alt_max, width, height)
+            if xy is None:
+                continue
+            traces.append(go.Scatter(
+                x=[xy[0]], y=[xy[1]],
+                mode="markers+text",
+                marker=dict(symbol="circle", size=pt["size"],
+                            color="rgba(0,0,0,0)", opacity=0),
+                text=[pt["symbol"]],
+                textfont=dict(size=pt["size"], color=pt["color"]),
+                textposition="middle center",
+                hovertemplate=(
+                    f"{pt['label']}<br>"
+                    f"Alt {pt['alt']:.1f}°  Az {pt['az']:.1f}°<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+        return traces
+    except Exception:
+        return []
+
+
+def _milkyway_guide_traces_h(
+    observer, t,
+    az_center: float, az_fov: float,
+    alt_min: float, alt_max: float,
+    width: int, height: int,
+    lang: str = "fr",
+) -> list[go.Scatter]:
+    """Guide Voie Lactée (nuages, rifts, bras, galaxies) — vue paysage."""
+    try:
+        from engines.milky_way import get_milkyway_guide_altaz
+        traces = []
+        for pt in get_milkyway_guide_altaz(observer, t, lang=lang):
+            xy = _project(pt["alt"], pt["az"], az_center, az_fov, alt_min, alt_max, width, height)
+            if xy is None:
+                continue
+            traces.append(go.Scatter(
+                x=[xy[0]], y=[xy[1]],
+                mode="markers+text",
+                marker=dict(symbol="circle", size=6,
+                            color=pt["color"], opacity=0.85),
+                text=[f"{pt['symbol']} {pt['label']}"],
+                textfont=dict(size=9, color=pt["color"]),
+                textposition="top center",
+                hovertemplate=(
+                    f"{pt['label']}<br>"
+                    f"Alt {pt['alt']:.1f}°  Az {pt['az']:.1f}°<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+        return traces
+    except Exception:
+        return []
+
+
 def _messier_traces(
     messier_df: pd.DataFrame,
     az_center: float,
@@ -810,7 +910,10 @@ _DEFAULT_OPTIONS: dict[str, bool] = {
     "show_ecliptic_grid": False,
     "show_grid":          False,
     "show_messier":      False,
-    "show_milkyway":     False,
+    "show_milkyway":          False,
+    "show_milkyway_guide":    False,
+    "show_galactic_points":   False,
+    "show_ecliptic_points":   False,
 }
 
 
@@ -986,6 +1089,7 @@ def build_horizon_chart(
     options: Optional[dict[str, bool]] = None,
     messier_df: Optional[pd.DataFrame] = None,
     satellites_data: list[dict] | None = None,
+    lang: str = "fr",
 ) -> go.Figure:
     """
     Vue horizon panoramique en projection équirectangulaire.
@@ -1011,6 +1115,18 @@ def build_horizon_chart(
 
     if opts['show_milkyway']:
         for tr in _milkyway_traces_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height):
+            fig.add_trace(tr)
+
+    if opts.get('show_milkyway_guide'):
+        for tr in _milkyway_guide_traces_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height, lang=lang):
+            fig.add_trace(tr)
+
+    if opts.get('show_galactic_points'):
+        for tr in _galactic_points_traces_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height):
+            fig.add_trace(tr)
+
+    if opts.get('show_ecliptic_points'):
+        for tr in _ecliptic_points_traces_h(observer, t, az_center, az_fov, alt_min, alt_max, width, height):
             fig.add_trace(tr)
 
     if opts['show_grid']:
@@ -1079,13 +1195,14 @@ def build_horizon_chart(
         paper_bgcolor=_BG_SKY,
         plot_bgcolor=_BG_SKY,
         margin=dict(l=0, r=0, t=0, b=0),
+        dragmode='pan',
         xaxis=dict(
             range=[0, width],
-            visible=False, showgrid=False, zeroline=False, fixedrange=True,
+            visible=False, showgrid=False, zeroline=False, fixedrange=False,
         ),
         yaxis=dict(
             range=[height, 0],
-            visible=False, showgrid=False, zeroline=False, fixedrange=True,
+            visible=False, showgrid=False, zeroline=False, fixedrange=False,
         ),
         shapes=_make_shapes(width, height, alt_min, alt_max),
         annotations=_make_annotations(az_center, az_fov, alt_min, alt_max, width, height),

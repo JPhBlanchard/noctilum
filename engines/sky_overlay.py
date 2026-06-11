@@ -192,6 +192,32 @@ def get_ecliptic_altaz(
     return _project_points(ra_h, dec_d, obs, t_sky, 0, 0)
 
 
+def get_ecliptic_points_altaz(observer: Observer, t=None) -> list[dict]:
+    """Retourne les 4 points cardinaux de l'écliptique (équinoxes + solstices)."""
+    eps  = math.radians(_EPS_DEG)
+    lons = np.array([0.0, 90.0, 180.0, 270.0])
+    lam  = np.radians(lons)
+    ra_rad  = np.arctan2(np.cos(eps) * np.sin(lam), np.cos(lam))
+    dec_rad = np.arcsin(np.sin(eps) * np.sin(lam))
+    ra_h  = (np.degrees(ra_rad) % 360.0) / 15.0
+    dec_d = np.degrees(dec_rad)
+    eph    = _get_eph()
+    t_sky  = _to_sky_time(t)
+    obs    = eph["earth"] + observer.skyfield_location()
+    alts, azs = _project_points(ra_h, dec_d, obs, t_sky, 0, 0)
+    color = "#ffaa44"
+    return [
+        {"key": "vernal",   "symbol": "♈", "color": color, "size": 16,
+         "label": "Équinoxe de printemps", "alt": float(alts[0]), "az": float(azs[0])},
+        {"key": "summer",   "symbol": "♋", "color": color, "size": 16,
+         "label": "Solstice d'été",        "alt": float(alts[1]), "az": float(azs[1])},
+        {"key": "autumnal", "symbol": "♎", "color": color, "size": 16,
+         "label": "Équinoxe d'automne",    "alt": float(alts[2]), "az": float(azs[2])},
+        {"key": "winter",   "symbol": "♑", "color": color, "size": 16,
+         "label": "Solstice d'hiver",      "alt": float(alts[3]), "az": float(azs[3])},
+    ]
+
+
 def get_ecliptic_grid(
     observer: Observer,
     t=None,

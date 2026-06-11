@@ -167,9 +167,9 @@ def get_milky_way_scatter(
     l_m, b_m, lum = _get_grid_points(resolution)
 
     cache_key = (
-        round(observer.lat, 2),
-        round(observer.lon, 2),
-        observer.elevation,
+        round(observer.lat, 4),
+        round(observer.lon, 4),
+        round(observer.elevation, 0),
         _t_key(t),
         len(l_m),
     )
@@ -228,7 +228,65 @@ def get_milky_way_scatter(
     }
 
 
+# Guide voie lactée — caractéristiques remarquables (coordonnées galactiques l°, b°)
+# (l°, b°, label_fr, label_en, couleur, symbole)
+_MW_GUIDE: list[tuple] = [
+    # — Nuages stellaires
+    ( 79,  +2, "Nuage du Cygne",          "Cygnus Cloud",       "#ffe0a0", "☁"),
+    (  7,  -2, "Gd. nuage du Sagittaire", "Great Sgr. Cloud",   "#ffe0a0", "☁"),
+    ( 16,  -1, "M24 / Pt. nuage Sgr.",    "M24 / Small Sgr.",   "#ffe0a0", "☁"),
+    ( 27,  -4, "Nuage du Scutum",         "Scutum Cloud",       "#ffe0a0", "☁"),
+    # — Régions sombres
+    ( 85,  +4, "Grand Rift – Cygne",      "Great Rift (Cyg.)",  "#b0b0b0", "▪"),
+    (  5,  +8, "Grand Rift – Ophiuchus",  "Great Rift (Oph.)",  "#b0b0b0", "▪"),
+    (302,  -1, "Sac de Charbon",          "Coalsack",           "#b0b0b0", "▪"),
+    # — Bras spiraux (direction des tangentes vues depuis le Soleil)
+    ( 50,   0, "Bras du Sagittaire",      "Sagittarius Arm",    "#80c8ff", "↝"),
+    (130,   0, "Bras de Persée",          "Perseus Arm",        "#80c8ff", "↝"),
+    (310,   0, "Bras du Centaure",        "Centaurus Arm",      "#80c8ff", "↝"),
+    # — Galaxies voisines
+    (121.2, -21.6, "Galaxie d'Andromède (M31)", "Andromeda Galaxy (M31)", "#ffb07a", "◎"),
+    (280.5, -32.9, "Grand Nuage de Magellan",   "Large Magellanic Cloud",  "#ffb07a", "◎"),
+    (302.8, -44.3, "Petit Nuage de Magellan",   "Small Magellanic Cloud",  "#ffb07a", "◎"),
+]
+
+
+def get_milkyway_guide_altaz(observer: Observer, t, lang: str = "fr") -> list[dict]:
+    """Points remarquables de la Voie Lactée avec leurs coordonnées AltAz."""
+    ls = np.array([p[0] for p in _MW_GUIDE], dtype=float)
+    bs = np.array([p[1] for p in _MW_GUIDE], dtype=float)
+    alts, azs = _compute_altaz(observer, t, ls, bs)
+    result = []
+    for i, p in enumerate(_MW_GUIDE):
+        label = p[2] if lang == "fr" else p[3]
+        result.append({
+            "label":  label,
+            "color":  p[4],
+            "symbol": p[5],
+            "alt":    float(alts[i]),
+            "az":     float(azs[i]),
+        })
+    return result
+
+
 def get_galactic_center_altaz(observer: Observer, t) -> tuple[float, float]:
     """Retourne (alt°, az°) du centre galactique (l=0°, b=0°)."""
     alts, azs = _compute_altaz(observer, t, np.array([0.0]), np.array([0.0]))
     return float(alts[0]), float(azs[0])
+
+
+def get_galactic_points_altaz(observer: Observer, t) -> list[dict]:
+    """Retourne les 4 points de référence galactiques avec leurs coordonnées AltAz."""
+    ls = np.array([0.0,   180.0, 0.0,  0.0 ])
+    bs = np.array([0.0,   0.0,   90.0, -90.0])
+    alts, azs = _compute_altaz(observer, t, ls, bs)
+    return [
+        {"key": "gc",  "symbol": "✦", "color": "#ffcc44", "size": 16,
+         "label": "Centre galactique",   "alt": float(alts[0]), "az": float(azs[0])},
+        {"key": "gac", "symbol": "✧", "color": "#ffcc44", "size": 16,
+         "label": "Anticentre galactique", "alt": float(alts[1]), "az": float(azs[1])},
+        {"key": "ngp", "symbol": "↑", "color": "#88ccff", "size": 16,
+         "label": "Pôle nord galactique", "alt": float(alts[2]), "az": float(azs[2])},
+        {"key": "sgp", "symbol": "↓", "color": "#88ccff", "size": 16,
+         "label": "Pôle sud galactique",  "alt": float(alts[3]), "az": float(azs[3])},
+    ]
