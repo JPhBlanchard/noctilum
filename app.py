@@ -85,7 +85,7 @@ st.markdown(
 )
 
 # Resize trigger : déclenche un re-run Streamlit quand la fenêtre change de taille,
-# ce qui permet à use_container_width=True de recalculer la largeur correcte.
+# ce qui permet à width="stretch" de recalculer la largeur correcte.
 _resize_trigger(default=None, key="_resize_w")
 
 # ─── Helpers interface ───────────────────────────────────────────────────────
@@ -406,7 +406,7 @@ with col_chart:
         )
         st.plotly_chart(
             sky_fig,
-            use_container_width=True,
+            width="stretch",
             config={"displayModeBar": False, "scrollZoom": _is_eyepiece},
             key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
@@ -463,7 +463,7 @@ with col_tabs:
                 placeholder="Paris, Londres, Tokyo…", label_visibility="collapsed",
             )
         with _lc2:
-            _do_search = st.button("🔍", use_container_width=True)
+            _do_search = st.button("🔍", width="stretch")
 
         if _do_search and _search_q.strip():
             try:
@@ -648,9 +648,9 @@ with col_tabs:
                     _pg2 = max(0, min(int(st.session_state.get("sat_page", 0)), _np - 1))
                     st.caption(_t("sat_page_info", n=len(_sn), p=_pg2+1, total=_np))
                     _bc1, _bc2 = st.columns(2)
-                    if _bc1.button(_t("sat_prev_btn"), disabled=_pg2 == 0, use_container_width=True):
+                    if _bc1.button(_t("sat_prev_btn"), disabled=_pg2 == 0, width="stretch"):
                         st.session_state["sat_page"] = _pg2 - 1; st.rerun()
-                    if _bc2.button(_t("sat_next_btn"), disabled=_pg2 == _np - 1, use_container_width=True):
+                    if _bc2.button(_t("sat_next_btn"), disabled=_pg2 == _np - 1, width="stretch"):
                         st.session_state["sat_page"] = _pg2 + 1; st.rerun()
                 elif not st.session_state.get("sat_all"):
                     st.multiselect(_t("sat_selection_label"), _sn, default=[],
@@ -695,7 +695,7 @@ with col_tabs:
 
         st.dataframe(
             pd.DataFrame(main_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=374,
         )
@@ -703,7 +703,7 @@ with col_tabs:
         st.caption(_t("caption_detail"))
         st.dataframe(
             pd.DataFrame(detail_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=374,
         )
@@ -724,7 +724,7 @@ with col_tabs:
         )
         st.dataframe(
             pd.DataFrame(_coord_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption(
@@ -754,7 +754,7 @@ with col_tabs:
                     _t("col_time"): e.dt_max.strftime("%H:%M") + " UTC",
                     _t("col_type"): _TYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
                 })
-            st.dataframe(pd.DataFrame(_sol_rows), use_container_width=True,
+            st.dataframe(pd.DataFrame(_sol_rows), width="stretch",
                          hide_index=True)
         else:
             st.caption(_t("no_solar_eclipse"))
@@ -773,7 +773,7 @@ with col_tabs:
                     _t("col_type"):     _LTYPE_ICON.get(e.type, "") + " " + tr_eclipse_type(e.type),
                     _t("col_totality"): tot,
                 })
-            st.dataframe(pd.DataFrame(_lun_rows), use_container_width=True,
+            st.dataframe(pd.DataFrame(_lun_rows), width="stretch",
                          hide_index=True)
         else:
             st.caption(_t("no_lunar_eclipse"))
@@ -839,7 +839,7 @@ with col_tabs:
                      _t("col_utc"):        p.dt.strftime("%H:%M")}
                     for p in _phases
                 ]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -872,7 +872,7 @@ with col_tabs:
                     }
                     for e in _conjs
                 ]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         else:
@@ -962,7 +962,7 @@ with col_tabs:
         ]
         st.dataframe(
             pd.DataFrame(_time_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -1041,7 +1041,7 @@ with col_tabs:
             showlegend=False,
             hovermode="x unified",
         )
-        st.plotly_chart(_fig_eot, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(_fig_eot, width="stretch", config={"displayModeBar": False})
         st.caption(_t("eot_caption"))
 
     with tab_crep:
@@ -1091,13 +1091,13 @@ with col_tabs:
         st.markdown(_t("solar_events_title"))
         st.dataframe(
             pd.DataFrame(_fmt_event_rows(_solar_evts, _tz_crep, _off)),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.markdown(_t("lunar_events_title"))
         st.dataframe(
             pd.DataFrame(_fmt_event_rows(_lunar_evts, _tz_crep, _off)),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption(_t("twilight_caption"))
