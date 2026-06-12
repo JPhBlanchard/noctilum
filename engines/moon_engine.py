@@ -388,7 +388,8 @@ def render_moon_image(
             math.sin(ha_rad),
             math.tan(lat_r) * math.cos(dec_r) - math.sin(dec_r) * math.cos(ha_rad),
         ))
-        final_rot = -q_deg
+        # flip=True (Est=gauche=CCW) : θ = -q ; flip=False (Est=droite=CW) : θ = +q
+        final_rot = -q_deg if flip else q_deg
 
     if abs(final_rot) > 0.5:
         result = result.rotate(final_rot, resample=Image.BICUBIC, expand=False)
