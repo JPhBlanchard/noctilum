@@ -301,6 +301,27 @@ try:
                 _alt_ep, _az_ep = resolve_target(_target, observer, t, planets_data)
                 _lbl_ep = _target.label
 
+        # Cible recherchée pour Zénith / Paysage
+        _sky_highlight: tuple[float, float, str] | None = None
+        _sky_alt: float | None = None
+        _sky_az: float | None = None
+        _sky_rise: object = None  # datetime | None
+        if not _is_eyepiece:
+            _sky_tgt = st.session_state.get("_sky_target")
+            if _sky_tgt is not None:
+                try:
+                    from engines.search_catalog import resolve_target as _rt, next_rise_utc as _nru
+                    _sky_alt, _sky_az = _rt(_sky_tgt, observer, t, planets_data)
+                    if _sky_alt > 0:
+                        _sky_highlight = (_sky_alt, _sky_az, _sky_tgt.label)
+                        if _is_horizon:
+                            st.session_state["az_center"] = int(round(_sky_az))
+                            _az_center = int(round(_sky_az))
+                    else:
+                        _sky_rise = _nru(_sky_tgt, observer, t, planets_data)
+                except Exception:
+                    pass
+
         # TSL en heures, minutes, secondes
         tsl   = local_sidereal_time(observer, t)
         tsl_h = int(tsl)
@@ -393,6 +414,7 @@ with col_chart:
                 az_center=float(_az_center), messier_df=messier_df,
                 options=_display_options, satellites_data=_sat_data,
                 lang=st.session_state.get("lang", "fr"),
+                highlight=_sky_highlight,
             )
         else:
             from renderers.sky_chart import build_sky_chart
@@ -401,6 +423,7 @@ with col_chart:
                 messier_df=messier_df, options=_display_options,
                 satellites_data=_sat_data,
                 lang=st.session_state.get("lang", "fr"),
+                highlight=_sky_highlight,
             )
     except Exception as _fig_exc:
         import traceback as _tb
@@ -410,7 +433,8 @@ with col_chart:
     if sky_fig is not None:
         sky_fig.update_layout(width=None)
         _ep_key_suffix = (
-            f"_ep_{_gross:.0f}_{_alt_ep:.2f}_{_az_ep:.2f}" if _is_eyepiece else ""
+            f"_ep_{_gross:.0f}_{_alt_ep:.2f}_{_az_ep:.2f}" if _is_eyepiece
+            else (f"_hl_{_sky_alt:.2f}_{_sky_az:.2f}" if _sky_highlight else "")
         )
         st.plotly_chart(
             sky_fig,
@@ -566,6 +590,40 @@ with col_tabs:
                 step=0.5, key="mag_limit_slider",
                 help=_t("mag_help") + (_t("mag_help_eyepiece") if _use_hipparcos else ""),
             )
+            if not _is_eyepiece:
+                st.divider()
+                st.subheader(_t("search_object"))
+                st.text_input(_t("search_object"), key="search_query_sky",
+                              placeholder="Sirius, M42, Andromède, Jupiter…",
+                              label_visibility="collapsed")
+                _sq_sky = st.session_state.get("search_query_sky", "").strip()
+                if _sq_sky:
+                    from engines.search_catalog import search as _search_sky
+                    _cp_sky = st.session_state.get("_planets_cache", [])
+                    _res_sky = _search_sky(_sq_sky, _cp_sky)
+                    if _res_sky:
+                        _oi_sky = [f"{tr_body(r.label)} — {r.description}" for r in _res_sky]
+                        _ch_sky = st.selectbox("", _oi_sky, key="search_sky_choice",
+                                               label_visibility="collapsed")
+                        st.session_state["_sky_target"] = _res_sky[_oi_sky.index(_ch_sky)]
+                        if _sky_alt is not None and _sky_alt > 0:
+                            st.success(f"✓ Alt {_sky_alt:.1f}°  Az {_sky_az:.1f}°")
+                        elif _sky_alt is not None:
+                            if _sky_rise is not None:
+                                _delta = _sky_rise - t
+                                _delta_m = int(_delta.total_seconds() / 60)
+                                _dh, _dm = divmod(_delta_m, 60)
+                                _rise_hm = _sky_rise.strftime("%H:%M")
+                                st.warning(f"Non visible — lever dans {_dh}h{_dm:02d}m ({_rise_hm} UTC)")
+                            else:
+                                st.warning("Non visible — circumpolaire sous l'horizon")
+                    else:
+                        st.caption(_t("no_results"))
+                elif st.session_state.get("_sky_target") is not None:
+                    if st.button("✕ Effacer la cible", key="clear_sky_target"):
+                        st.session_state.pop("_sky_target", None)
+                        st.rerun()
+
             if _is_eyepiece:
                 st.divider()
                 st.subheader(_t("section_view"))

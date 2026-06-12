@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 _static_catalog: list["CelestialTarget"] | None = None
@@ -143,6 +144,61 @@ def search(
             break
 
     return results
+
+
+# ── Prochain lever ────────────────────────────────────────────────────────────
+
+def next_rise_utc(
+    target: CelestialTarget,
+    observer,
+    t: datetime,
+    planets_data: list[dict] | None = None,
+) -> datetime | None:
+    """Retourne le prochain lever UTC dans les 24h, ou None si circumpolaire/jamais visible."""
+    if target.category == "planet":
+        for p in (planets_data or []):
+            if p["name"] == target.planet_name:
+                rise_str = p.get("rise", "—")
+                if rise_str == "—":
+                    return None
+                h, m = map(int, rise_str.split(":"))
+                t_utc = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+                rise_dt = t_utc.replace(hour=h, minute=m, second=0, microsecond=0)
+                if rise_dt <= t_utc:
+                    rise_dt += timedelta(days=1)
+                return rise_dt
+        return None
+
+    if target.ra_hours is None or target.dec_deg is None:
+        return None
+
+    from skyfield.api import Star
+    from skyfield import almanac as _alm
+    from engines.astro_engine import _get_eph, _get_ts, _to_sky_time
+
+    eph = _get_eph()
+    ts = _get_ts()
+    location = observer.skyfield_location()
+    t_utc = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+    t0 = _to_sky_time(t_utc)
+    t1 = ts.from_datetime(t_utc + timedelta(days=1))
+    star = Star(ra_hours=target.ra_hours, dec_degrees=target.dec_deg)
+    earth_obs = eph["earth"] + location
+
+    def above_horizon(t_check):
+        alt, _, _ = earth_obs.at(t_check).observe(star).apparent().altaz()
+        return alt.degrees > 0
+
+    above_horizon.rough_period = 0.5
+
+    try:
+        times, events = _alm.find_discrete(t0, t1, above_horizon)
+        for ti, ev in zip(times, events):
+            if ev == 1:
+                return ti.utc_datetime()
+    except Exception:
+        pass
+    return None
 
 
 # ── Résolution en (alt, az) ───────────────────────────────────────────────────

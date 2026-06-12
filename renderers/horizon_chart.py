@@ -1090,6 +1090,7 @@ def build_horizon_chart(
     messier_df: Optional[pd.DataFrame] = None,
     satellites_data: list[dict] | None = None,
     lang: str = "fr",
+    highlight: Optional[tuple[float, float, str]] = None,
 ) -> go.Figure:
     """
     Vue horizon panoramique en projection équirectangulaire.
@@ -1209,5 +1210,28 @@ def build_horizon_chart(
         showlegend=False,
         hovermode='closest',
     )
+
+    if highlight is not None:
+        h_alt, h_az, h_label = highlight
+        xy = _project(h_alt, h_az, az_center, az_fov, alt_min, alt_max, width, height)
+        if xy is not None:
+            hx, hy = xy
+            s = 18
+            fig.add_trace(go.Scatter(
+                x=[hx - s, hx + s, None, hx, hx, None],
+                y=[hy, hy, None, hy - s, hy + s, None],
+                mode="lines",
+                line=dict(color="#ffcc00", width=2),
+                hoverinfo="skip", showlegend=False,
+            ))
+            fig.add_trace(go.Scatter(
+                x=[hx], y=[hy],
+                mode="markers+text",
+                marker=dict(symbol="circle-open", size=22, color="#ffcc00", line=dict(width=2)),
+                text=[h_label], textposition="top center",
+                textfont=dict(color="#ffcc00", size=12),
+                hovertemplate=f"{h_label}<br>Alt {h_alt:.1f}° Az {h_az:.1f}°<extra></extra>",
+                showlegend=False,
+            ))
 
     return fig
