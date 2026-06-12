@@ -136,6 +136,47 @@ _CATALOG: list[tuple] = [
     (110,  0.6783,   41.6850,  8.5,  'Gx',  ''),
 ]
 
+# Taille angulaire des objets étendus : {num: (major_arcmin, minor_arcmin, pa_deg)}
+# PA = 0 → allongé selon l'axe altitude (vertical sur la carte)
+_SIZE: dict[int, tuple[float, float, float]] = {
+    4:   (26,  26,   0),
+    6:   (25,  25,   0),
+    7:   (80,  80,   0),
+    8:   (90,  40,   0),   # Lagune
+    13:  (20,  20,   0),
+    17:  (46,  37,  30),   # Oméga
+    20:  (28,  28,   0),   # Trifide
+    22:  (24,  24,   0),
+    23:  (27,  27,   0),
+    24:  (90,  30,   0),   # Nuage du Sagittaire
+    31:  (190, 60,  35),   # Andromède
+    33:  (70,  45,  23),   # Triangle
+    35:  (28,  28,   0),
+    39:  (32,  32,   0),
+    41:  (38,  38,   0),
+    42:  (85,  60,  32),   # Orion
+    44:  (95,  95,   0),   # Praesepe
+    45:  (110, 110,  0),   # Pléiades
+    47:  (30,  30,   0),
+    48:  (54,  54,   0),
+    67:  (30,  30,   0),
+    81:  (26,  14, 157),   # Bode
+    82:  (11,   4,  65),   # Cigare
+    83:  (13,  12,   0),   # Spirale australe
+    92:  (14,  14,   0),
+    93:  (22,  22,   0),
+    101: (29,  29,   0),   # Moulinet
+    106: (19,   7,  30),
+    110: (22,  11, 170),
+}
+
+# Objets hors catalogue Messier mais visuellement étendus
+# (label, nom_fr, ra_h, dec_deg, major_arcmin, minor_arcmin, pa_deg, type)
+_SPECIAL_EXTENDED = [
+    ('LMC', 'Grand Nuage de Magellan', 5.3933, -69.75, 646, 550, 0, 'Gx'),
+    ('SMC', 'Petit Nuage de Magellan', 0.8783, -72.80, 320, 200, 0, 'Gx'),
+]
+
 # Type → (symbole Plotly, couleur hex, nom français)
 TYPE_INFO: dict[str, tuple[str, str, str]] = {
     'Gx':  ('circle-open',   '#FFB347', 'Galaxie'),
@@ -182,16 +223,48 @@ def get_messier_visible(
         if alt <= 0.0:
             continue
         sym, col, _ = TYPE_INFO.get(typ, _DEFAULT_TYPE)
+        major_am, minor_am, pa = _SIZE.get(num, (0, 0, 0))
         rows.append({
-            'num':     num,
-            'label':   f'M{num}',
-            'name':    name_fr or f'M{num}',
-            'mag':     mag,
-            'type':    typ,
-            'symbol':  sym,
-            'color':   col,
-            'alt_deg': round(alt, 3),
-            'az_deg':  round(az,  3),
+            'num':       num,
+            'label':     f'M{num}',
+            'name':      name_fr or f'M{num}',
+            'mag':       mag,
+            'type':      typ,
+            'symbol':    sym,
+            'color':     col,
+            'alt_deg':   round(alt, 3),
+            'az_deg':    round(az,  3),
+            'major_deg': round(major_am / 60, 4),
+            'minor_deg': round(minor_am / 60, 4),
+            'pa_deg':    pa,
         })
+
+    # Objets spéciaux (LMC, SMC)
+    if _SPECIAL_EXTENDED:
+        sp_ra  = np.array([e[2] for e in _SPECIAL_EXTENDED])
+        sp_dec = np.array([e[3] for e in _SPECIAL_EXTENDED])
+        sp_stars = Star(ra_hours=sp_ra, dec_degrees=sp_dec)
+        sp_alt, sp_az, _ = obs.at(t_sky).observe(sp_stars).apparent().altaz("standard")
+        for i, entry in enumerate(_SPECIAL_EXTENDED):
+            label, name_fr, _, _, major_am, minor_am, pa, typ = entry
+            alt = sp_alt.degrees[i]
+            az  = sp_az.degrees[i]
+            if alt <= 0.0:
+                continue
+            sym, col, _ = TYPE_INFO.get(typ, _DEFAULT_TYPE)
+            rows.append({
+                'num':       -1,
+                'label':     label,
+                'name':      name_fr,
+                'mag':       0.0,
+                'type':      typ,
+                'symbol':    sym,
+                'color':     col,
+                'alt_deg':   round(alt, 3),
+                'az_deg':    round(az,  3),
+                'major_deg': round(major_am / 60, 4),
+                'minor_deg': round(minor_am / 60, 4),
+                'pa_deg':    pa,
+            })
 
     return pd.DataFrame(rows)

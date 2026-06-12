@@ -228,10 +228,7 @@ try:
         else:
             catalog  = _load_catalog()
             stars_df = catalog.get_visible(observer, t, mag_limit=float(mag_limit))
-        messier_df   = (
-            get_messier_visible(observer, t)
-            if st.session_state.get("show_messier", False) else None
-        )
+        messier_df = get_messier_visible(observer, t)
 
         # Satellites
         _show_sat = bool(st.session_state.get("show_satellites", False))
@@ -415,6 +412,7 @@ with col_chart:
                 options=_display_options, satellites_data=_sat_data,
                 lang=st.session_state.get("lang", "fr"),
                 highlight=_sky_highlight,
+                halo_mag_limit=mag_limit,
             )
         else:
             from renderers.sky_chart import build_sky_chart
@@ -424,6 +422,7 @@ with col_chart:
                 satellites_data=_sat_data,
                 lang=st.session_state.get("lang", "fr"),
                 highlight=_sky_highlight,
+                halo_mag_limit=mag_limit,
             )
     except Exception as _fig_exc:
         import traceback as _tb

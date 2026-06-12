@@ -726,6 +726,72 @@ def _ecliptic_points_traces(
         return []
 
 
+def _hex_rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f'rgba({r},{g},{b},{alpha})'
+
+
+def _extended_halo_traces(messier_df: pd.DataFrame, width: int, height: int) -> list[go.Scatter]:
+    """Ellipses translucides pour les objets étendus (galaxies, nébuleuses…)."""
+    import math
+    traces = []
+    for _, row in messier_df.iterrows():
+        a = row.get('major_deg', 0)
+        b = row.get('minor_deg', 0)
+        if a < 0.05:
+            continue
+        b = b if b > 0 else a
+        alt_c, az_c = row['alt_deg'], row['az_deg']
+        color = row['color']
+        pa_rad = math.radians(row.get('pa_deg', 0))
+        cos_alt = math.cos(math.radians(max(1.0, alt_c)))
+
+        for scale, opacity in ((1.0, 0.22), (0.5, 0.42)):
+            xs, ys = [], []
+            for i in range(49):
+                theta = 2 * math.pi * i / 48
+                sa, sb = scale * a, scale * b
+                dalt    = sa * math.cos(theta) * math.cos(pa_rad) - sb * math.sin(theta) * math.sin(pa_rad)
+                daz_sky = sa * math.cos(theta) * math.sin(pa_rad) + sb * math.sin(theta) * math.cos(pa_rad)
+                pt_alt = max(0.1, alt_c + dalt)
+                pt_az  = (az_c + daz_sky / cos_alt) % 360
+                xy = altaz_to_xy(pt_alt, pt_az, width, height)
+                if xy:
+                    xs.append(xy[0])
+                    ys.append(xy[1])
+            if len(xs) > 2:
+                traces.append(go.Scatter(
+                    x=xs, y=ys,
+                    mode='lines',
+                    fill='toself',
+                    fillcolor=f'rgba(160,160,160,{opacity})',
+                    line=dict(color='rgba(0,0,0,0)', width=0),
+                    hoverinfo='skip',
+                    showlegend=False,
+                ))
+
+        # Marqueur invisible au centre pour le tooltip
+        cxy = altaz_to_xy(alt_c, az_c, width, height)
+        if cxy:
+            from engines.messier_catalog import TYPE_INFO, _DEFAULT_TYPE
+            _, _, type_fr = TYPE_INFO.get(row['type'], _DEFAULT_TYPE)
+            name = row['name'] if row['name'] != row['label'] else ''
+            traces.append(go.Scatter(
+                x=[cxy[0]], y=[cxy[1]],
+                mode='markers',
+                marker=dict(size=max(12, int(a * 380 / 90)), opacity=0, color='rgba(0,0,0,0)'),
+                hovertemplate=(
+                    f"<b>{row['label']}</b>{' — ' + name if name else ''}<br>"
+                    f"{type_fr} · mag {row['mag']:.1f}<br>"
+                    f"Alt {alt_c:.1f}°  Az {az_c:.1f}°"
+                    "<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+    return traces
+
+
 def _messier_traces(messier_df: pd.DataFrame, width: int, height: int) -> list[go.Scatter]:
     """Un trace Plotly par type d'objet Messier (symboles distincts)."""
     if messier_df.empty:
@@ -953,6 +1019,7 @@ def build_sky_chart(
     satellites_data: list[dict] | None = None,
     lang: str = "fr",
     highlight: Optional[tuple[float, float, str]] = None,
+    halo_mag_limit: float = 6.5,
 ) -> go.Figure:
     """
     Construit et retourne la carte du ciel interactive (go.Figure Plotly).
@@ -1043,7 +1110,12 @@ def build_sky_chart(
     if opts["show_stars"] and not stars_df.empty:
         fig.add_trace(_stars_trace(stars_df, width, height))
 
-    # Objets de Messier
+    # Halos étendus — affichés jusqu'à halo_mag_limit (couplé au curseur étoiles)
+    if messier_df is not None and not messier_df.empty:
+        _halo_df = messier_df[messier_df['mag'] <= halo_mag_limit]
+        for tr in _extended_halo_traces(_halo_df, width, height):
+            fig.add_trace(tr)
+    # Symboles Messier complets — seulement si l'option est cochée
     if opts["show_messier"] and messier_df is not None and not messier_df.empty:
         for tr in _messier_traces(messier_df, width, height):
             fig.add_trace(tr)
