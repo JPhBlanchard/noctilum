@@ -439,7 +439,7 @@ with col_chart:
             sky_fig,
             width="stretch",
             config={"displayModeBar": False, "scrollZoom": True},
-            key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
+            key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{mag_limit:.1f}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
 
     with st.popover(_t("about_btn")):
