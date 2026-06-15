@@ -358,15 +358,20 @@ with _hcol1:
         unsafe_allow_html=True,
     )
 with _hcol2:
-    st.radio(
-        "🌐",
-        ["fr", "en", "es", "zh", "hi"],
-        format_func=lambda x: {"fr": "🇫🇷 fr", "en": "🇬🇧 en",
-                                "es": "🇪🇸 es", "zh": "🇨🇳 中", "hi": "🇮🇳 हि"}[x],
-        horizontal=True,
-        key="lang",
-        label_visibility="collapsed",
-    )
+    _hlang, _habout = st.columns([5, 1])
+    with _hlang:
+        st.radio(
+            "🌐",
+            ["fr", "en", "es", "zh", "hi"],
+            format_func=lambda x: {"fr": "🇫🇷 fr", "en": "🇬🇧 en",
+                                    "es": "🇪🇸 es", "zh": "🇨🇳 中", "hi": "🇮🇳 हि"}[x],
+            horizontal=True,
+            key="lang",
+            label_visibility="collapsed",
+        )
+    with _habout:
+        with st.popover(_t("about_btn"), use_container_width=True):
+            st.markdown(_t("about_text"))
 
 # ─── Colonnes principales : carte (gauche) + onglets (droite) ────────────────
 
@@ -447,8 +452,6 @@ with col_chart:
             key=f"sky_{observer.lat:.4f}_{observer.lon:.4f}_{_view}_{_az_center}_{mag_limit:.1f}_{''.join(str(int(v)) for v in _display_options.values())}{_ep_key_suffix}",
         )
 
-    with st.popover(_t("about_btn")):
-        st.markdown(_t("about_text"))
 
 # ── Onglets (colonne droite) ──────────────────────────────────────────────────
 with col_tabs:
