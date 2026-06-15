@@ -1,69 +1,61 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 
 
-def _geolocate(ip: str) -> dict:
-    if not ip or ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172."):
-        return {}
-    try:
-        import requests
-        r = requests.get(
-            f"https://ip-api.com/json/{ip}",
-            params={"fields": "country,countryCode,city,region,lat,lon,org"},
-            timeout=5,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("status") == "success":
-                return data
-    except Exception:
-        pass
-    return {}
-
-
-def get_client_ip_js() -> str | None:
-    """Retourne l'IP cliente via JS (None = pas encore prêt, str = IP obtenue)."""
-    try:
-        from streamlit_javascript import st_javascript
-        result = st_javascript(
-            "await fetch('https://api.ipify.org?format=json')"
-            ".then(r => r.json()).then(d => d.ip).catch(() => '')"
-        )
-        if result == 0:  # composant pas encore prêt (1er render)
-            return None
-        return str(result) if result else ""
-    except Exception:
-        return ""
-
-
-def track_visit(client_ip: str) -> None:
+def track_visit() -> None:
+    """Render un composant JS invisible qui gère tout le tracking côté navigateur."""
     if st.session_state.get("visit_tracked"):
         return
-    if client_ip is None:  # JS pas encore prêt
-        return
     st.session_state["visit_tracked"] = True
+
     try:
-        from supabase import create_client
-        url = st.secrets["SUPABASE_URL"].strip()
-        key = st.secrets["SUPABASE_ANON_KEY"].strip()
-        supabase = create_client(url, key)
+        supabase_url = st.secrets["SUPABASE_URL"].strip()
+        supabase_key = st.secrets["SUPABASE_ANON_KEY"].strip()
+    except Exception:
+        return
 
-        geo = _geolocate(client_ip)
+    # Le JS s'exécute dans le navigateur du visiteur :
+    # 1) fetch la vraie IP publique via api.ipify.org
+    # 2) géolocalise via ip-api.com
+    # 3) insère dans Supabase via l'API REST (fetch direct, pas de lib)
+    html = f"""
+<script>
+(async () => {{
+  try {{
+    const ip = await fetch('https://api.ipify.org?format=json')
+      .then(r => r.json()).then(d => d.ip).catch(() => '');
 
-        supabase.table("visits").insert({
-            "ip":           client_ip or None,
-            "country":      geo.get("country"),
-            "country_code": geo.get("countryCode"),
-            "city":         geo.get("city"),
-            "region":       geo.get("region"),
-            "lat":          geo.get("lat"),
-            "lon":          geo.get("lon"),
-            "org":          geo.get("org"),
-        }).execute()
-        st.session_state["_visit_error"] = None
-    except Exception as e:
-        st.session_state["_visit_error"] = str(e)
+    const geo = ip
+      ? await fetch('https://ip-api.com/json/' + ip + '?fields=country,countryCode,city,region,lat,lon,org')
+          .then(r => r.json()).catch(() => {{}})
+      : {{}};
+
+    await fetch('{supabase_url}/rest/v1/visits', {{
+      method: 'POST',
+      headers: {{
+        'apikey': '{supabase_key}',
+        'Authorization': 'Bearer {supabase_key}',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      }},
+      body: JSON.stringify({{
+        ip:           ip   || null,
+        country:      geo.country      || null,
+        country_code: geo.countryCode  || null,
+        city:         geo.city         || null,
+        region:       geo.region       || null,
+        lat:          geo.lat          || null,
+        lon:          geo.lon          || null,
+        org:          geo.org          || null,
+      }})
+    }});
+  }} catch(e) {{ console.warn('noctilum tracker:', e); }}
+}})();
+</script>
+"""
+    components.html(html, height=0)
 
 
 @st.cache_data(ttl=300, show_spinner=False)

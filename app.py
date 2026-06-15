@@ -25,7 +25,7 @@ from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
 from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs, months as _months
-from engines.visit_tracker import track_visit, get_client_ip_js, get_visit_stats
+from engines.visit_tracker import track_visit, get_visit_stats
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
 from renderers.community_chart import build_community_map
@@ -338,10 +338,7 @@ except Exception as exc:
     st.stop()
 
 # ─── Tracking visiteur (une seule fois par session) ──────────────────────────
-# Render le composant JS seulement si la visite n'est pas encore enregistrée.
-if not st.session_state.get("visit_tracked"):
-    _client_ip = get_client_ip_js()
-    track_visit(_client_ip)
+track_visit()
 
 # ─── En-tête : titre + langue ────────────────────────────────────────────────
 
