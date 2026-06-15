@@ -24,15 +24,22 @@ def track_visit() -> None:
 <script>
 (async () => {{
   try {{
+    // Injecter le CSS dans le document parent pour cacher cet iframe
+    try {{
+      const s = window.parent.document.createElement('style');
+      s.textContent = "iframe[height='0']{{display:none!important;min-height:0!important}}";
+      window.parent.document.head.appendChild(s);
+    }} catch(_) {{}}
+
     let ip = null, countryCode = null;
 
-    // api.country.is : conçu pour le CORS navigateur
+    // api.country.is : conçu pour CORS navigateur
     try {{
       const d = await fetch('https://api.country.is/').then(r => r.json());
       ip = d.ip || null;
       countryCode = d.country || null;
     }} catch(_) {{
-      // Fallback : langue du navigateur (approximatif mais universel)
+      // Fallback : langue du navigateur
       const lang = navigator.language || '';
       const parts = lang.split('-');
       if (parts.length > 1) {{
@@ -53,8 +60,8 @@ def track_visit() -> None:
       }},
       body: JSON.stringify({{
         ip:           ip,
+        country:      countryCode,
         country_code: countryCode,
-        country:      null,
         city:         null,
         region:       null,
         lat:          null,
@@ -98,21 +105,16 @@ def get_visit_stats(days: int = 30) -> dict:
         if not visits_df.empty and "ts" in visits_df.columns:
             visits_df["ts"] = pd.to_datetime(visits_df["ts"], utc=True)
 
-        if not visits_df.empty:
-            # Utilise country_code si country est absent
-            col = "country" if visits_df["country"].notna().any() else "country_code"
-            unique_countries = int(visits_df[col].nunique())
-            top_countries = (
-                visits_df.groupby(col)
-                .size()
-                .sort_values(ascending=False)
-                .head(10)
-                .reset_index()
-                .values.tolist()
-            )
-        else:
-            unique_countries = 0
-            top_countries = []
+        unique_countries = int(visits_df["country"].nunique()) if not visits_df.empty else 0
+        top_countries = (
+            visits_df.groupby("country")
+            .size()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+            .values.tolist()
+            if not visits_df.empty else []
+        )
 
         return {
             "total": total,
