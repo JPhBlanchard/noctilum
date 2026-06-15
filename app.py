@@ -1191,21 +1191,15 @@ with col_tabs:
         _stats = get_visit_stats(days=30)
         _vdf   = _stats["visits_df"]
 
-        _mc1, _mc2, _mc3 = st.columns(3)
+        _mc1, _mc2 = st.columns(2)
         with _mc1:
             st.metric("Visites (30j)", len(_vdf) if not _vdf.empty else 0)
         with _mc2:
             st.metric("Pays", _stats["unique_countries"])
-        with _mc3:
-            _top_city = (
-                _vdf["city"].dropna().value_counts().index[0]
-                if not _vdf.empty and "city" in _vdf.columns and _vdf["city"].dropna().any()
-                else "—"
-            )
-            st.metric("Ville la plus active", _top_city)
 
         _comm_map = build_community_map(_vdf)
-        st_folium(_comm_map, use_container_width=True, height=380, key="community_map")
+        st_folium(_comm_map, use_container_width=True, height=380,
+                  key="community_map", returned_objects=[])
 
 
         st.caption(
