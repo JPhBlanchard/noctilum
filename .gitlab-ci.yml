@@ -17,7 +17,7 @@ refresh-tle:
     - git config --global user.name "Noctilum CI"
     - git add data/tle_*.txt
     - 'git diff --cached --quiet || git commit -m "chore: rafraichissement TLE $(date -u +%Y-%m-%d)"'
-    - git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git" HEAD:main
+    - git push "https://oauth2:${GL_PUSH_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git" HEAD:main
 
 # ── Miroir GitLab → GitHub sur chaque push main ───────────────────────────────
 mirror-to-github:
