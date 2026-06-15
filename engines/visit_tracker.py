@@ -6,12 +6,13 @@ from datetime import datetime, timezone, timedelta
 def _get_client_ip() -> str:
     try:
         headers = st.context.headers
-        forwarded = headers.get("X-Forwarded-For", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return headers.get("X-Real-IP", "")
+        for h in ("CF-Connecting-IP", "True-Client-IP", "X-Forwarded-For", "X-Real-IP"):
+            val = headers.get(h, "")
+            if val:
+                return val.split(",")[0].strip()
     except Exception:
-        return ""
+        pass
+    return ""
 
 
 def _geolocate(ip: str) -> dict:
@@ -43,6 +44,14 @@ def track_visit() -> None:
 
         ip = _get_client_ip()
         geo = _geolocate(ip)
+
+        # DEBUG TEMPORAIRE — retirer après diagnostic
+        try:
+            headers = st.context.headers
+            all_h = dict(headers)
+        except Exception:
+            all_h = {}
+        st.session_state["_visit_debug"] = f"ip={ip!r} | geo={geo} | headers={list(all_h.keys())}"
 
         client.table("visits").insert({
             "ip":           ip or None,

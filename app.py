@@ -1189,6 +1189,8 @@ with col_tabs:
     with tab_community:
         if st.session_state.get("_visit_error"):
             st.error(f"Debug tracker : {st.session_state['_visit_error']}")
+        if st.session_state.get("_visit_debug"):
+            st.info(f"Debug IP : {st.session_state['_visit_debug']}")
         _stats = get_visit_stats(days=30)
         _vdf   = _stats["visits_df"]
 
