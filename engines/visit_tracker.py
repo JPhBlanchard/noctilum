@@ -37,8 +37,8 @@ def track_visit() -> None:
     st.session_state["visit_tracked"] = True
     try:
         from supabase import create_client
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_ANON_KEY"]
+        url = st.secrets["SUPABASE_URL"].strip()
+        key = st.secrets["SUPABASE_ANON_KEY"].strip()
         client = create_client(url, key)
 
         ip = _get_client_ip()
@@ -54,8 +54,9 @@ def track_visit() -> None:
             "lon":          geo.get("lon"),
             "org":          geo.get("org"),
         }).execute()
-    except Exception:
-        pass
+        st.session_state["_visit_error"] = None
+    except Exception as e:
+        st.session_state["_visit_error"] = str(e)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
