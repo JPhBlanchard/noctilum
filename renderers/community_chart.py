@@ -37,9 +37,9 @@ def build_community_map(visits_df: pd.DataFrame) -> folium.Map:
         location=[20, 0],
         zoom_start=2,
         min_zoom=2,
-        max_zoom=6,
+        max_zoom=2,
         max_bounds=True,
-        zoom_control=True,
+        zoom_control=False,
         tiles=None,
     )
     m.options["attributionControl"] = False
