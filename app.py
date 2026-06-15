@@ -25,8 +25,10 @@ from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
 from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs, months as _months
+from engines.visit_tracker import track_visit, get_visit_stats
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
+from renderers.community_chart import build_community_map
 
 # ─── Configuration de la page ────────────────────────────────────────────────
 
@@ -335,6 +337,10 @@ except Exception as exc:
     st.code(traceback.format_exc())
     st.stop()
 
+# ─── Tracking visiteur (une seule fois par session) ──────────────────────────
+
+track_visit()
+
 # ─── En-tête : titre + langue ────────────────────────────────────────────────
 
 _hcol1, _hcol2 = st.columns([5, 3])
@@ -451,10 +457,11 @@ with col_tabs:
     sorted_bodies = sorted(planets_data, key=lambda b: (not b["above_horizon"], -b["alt"]))
 
     (tab_lieu, tab_temps, tab_vue,
-     tab_eph, tab_coord, tab_ecl, tab_moon, tab_conj, tab_crep) = st.tabs([
+     tab_eph, tab_coord, tab_ecl, tab_moon, tab_conj, tab_crep, tab_community) = st.tabs([
         _t("tab_lieu"), _t("tab_temps"), _t("tab_vue"),
         _t("tab_eph"), _t("tab_coord"), _t("tab_ecl"),
         _t("tab_moon"), _t("tab_conj"), _t("tab_crep"),
+        "🌍 Communauté",
     ])
 
     # ── Onglet Lieu ──────────────────────────────────────────────────────────────
@@ -1170,6 +1177,39 @@ with col_tabs:
             hide_index=True,
         )
         st.caption(_t("twilight_caption"))
+
+    with tab_community:
+        _stats = get_visit_stats(days=30)
+        _vdf   = _stats["visits_df"]
+
+        _mc1, _mc2, _mc3 = st.columns(3)
+        with _mc1:
+            st.metric("Visites (30j)", len(_vdf) if not _vdf.empty else 0)
+        with _mc2:
+            st.metric("Pays", _stats["unique_countries"])
+        with _mc3:
+            _top_city = (
+                _vdf["city"].dropna().value_counts().index[0]
+                if not _vdf.empty and "city" in _vdf.columns and _vdf["city"].dropna().any()
+                else "—"
+            )
+            st.metric("Ville la plus active", _top_city)
+
+        _comm_map = build_community_map(_vdf)
+        st_folium(_comm_map, use_container_width=True, height=380, key="community_map")
+
+        if not _vdf.empty:
+            _display_df = _vdf.head(20).copy()
+            _display_df = _display_df.rename(columns={
+                "ts": "Date", "city": "Ville", "country": "Pays", "org": "FAI",
+            })
+            _cols_show = [c for c in ["Date", "Ville", "Pays", "FAI"] if c in _display_df.columns]
+            st.dataframe(_display_df[_cols_show], width="stretch", hide_index=True)
+
+        st.caption(
+            "Données anonymisées — seule l'IP publique est collectée à des fins statistiques. "
+            "Aucun cookie n'est utilisé."
+        )
 
     # Résumé rapide (hors onglet)
     nb_visible_bodies = sum(1 for b in planets_data if b["above_horizon"])

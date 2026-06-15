@@ -4,6 +4,9 @@ __pycache__/
 *.pyo
 .venv/
 
+# Secrets
+.streamlit/secrets.toml
+
 # Données volumineuses (téléchargées automatiquement)
 data/de440s.bsp
 data/hip_main.dat

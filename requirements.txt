@@ -9,3 +9,4 @@ requests
 sgp4>=2.22
 timezonefinder>=6.0
 astropy>=5.3
+supabase>=2.0
