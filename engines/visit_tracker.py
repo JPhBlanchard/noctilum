@@ -3,20 +3,8 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 
 
-def _get_client_ip() -> str:
-    try:
-        headers = st.context.headers
-        for h in ("CF-Connecting-IP", "True-Client-IP", "X-Forwarded-For", "X-Real-IP"):
-            val = headers.get(h, "")
-            if val:
-                return val.split(",")[0].strip()
-    except Exception:
-        pass
-    return ""
-
-
 def _geolocate(ip: str) -> dict:
-    if not ip or ip.startswith("127.") or ip.startswith("192.168."):
+    if not ip or ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172."):
         return {}
     try:
         import requests
@@ -26,35 +14,45 @@ def _geolocate(ip: str) -> dict:
             timeout=5,
         )
         if r.status_code == 200:
-            return r.json()
+            data = r.json()
+            if data.get("status") == "success":
+                return data
     except Exception:
         pass
     return {}
 
 
-def track_visit() -> None:
+def get_client_ip_js() -> str | None:
+    """Retourne l'IP cliente via JS (None = pas encore prêt, str = IP obtenue)."""
+    try:
+        from streamlit_javascript import st_javascript
+        result = st_javascript(
+            "await fetch('https://api.ipify.org?format=json')"
+            ".then(r => r.json()).then(d => d.ip).catch(() => '')"
+        )
+        if result == 0:  # composant pas encore prêt (1er render)
+            return None
+        return str(result) if result else ""
+    except Exception:
+        return ""
+
+
+def track_visit(client_ip: str) -> None:
     if st.session_state.get("visit_tracked"):
+        return
+    if client_ip is None:  # JS pas encore prêt
         return
     st.session_state["visit_tracked"] = True
     try:
         from supabase import create_client
         url = st.secrets["SUPABASE_URL"].strip()
         key = st.secrets["SUPABASE_ANON_KEY"].strip()
-        client = create_client(url, key)
+        supabase = create_client(url, key)
 
-        ip = _get_client_ip()
-        geo = _geolocate(ip)
+        geo = _geolocate(client_ip)
 
-        # DEBUG TEMPORAIRE — retirer après diagnostic
-        try:
-            headers = st.context.headers
-            all_h = dict(headers)
-        except Exception:
-            all_h = {}
-        st.session_state["_visit_debug"] = f"ip={ip!r} | geo={geo} | headers={list(all_h.keys())}"
-
-        client.table("visits").insert({
-            "ip":           ip or None,
+        supabase.table("visits").insert({
+            "ip":           client_ip or None,
             "country":      geo.get("country"),
             "country_code": geo.get("countryCode"),
             "city":         geo.get("city"),
@@ -74,19 +72,19 @@ def get_visit_stats(days: int = 30) -> dict:
         from supabase import create_client
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_ANON_KEY"]
-        client = create_client(url, key)
+        supabase = create_client(url, key)
 
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
         recent = (
-            client.table("visits")
+            supabase.table("visits")
             .select("ts,country,country_code,city,region,lat,lon,org")
             .gte("ts", since)
             .order("ts", desc=True)
             .execute()
         )
         total_resp = (
-            client.table("visits")
+            supabase.table("visits")
             .select("id", count="exact")
             .execute()
         )

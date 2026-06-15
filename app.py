@@ -25,7 +25,7 @@ from engines.astro_engine import Observer, get_planets_data, local_sidereal_time
 from engines.messier_catalog import get_messier_visible
 from engines.star_catalog import StarCatalog
 from engines.i18n import t as _t, tr_body, tr_event, tr_phase, tr_eclipse_type, compass_dirs, months as _months
-from engines.visit_tracker import track_visit, get_visit_stats
+from engines.visit_tracker import track_visit, get_client_ip_js, get_visit_stats
 from renderers.eyepiece_chart import build_eyepiece_chart
 from renderers.horizon_chart import build_horizon_chart
 from renderers.community_chart import build_community_map
@@ -338,8 +338,10 @@ except Exception as exc:
     st.stop()
 
 # ─── Tracking visiteur (une seule fois par session) ──────────────────────────
-
-track_visit()
+# get_client_ip_js() render un composant invisible ; retourne None au 1er pass.
+# track_visit() n'insère que quand l'IP est disponible (2e pass).
+_client_ip = get_client_ip_js()
+track_visit(_client_ip)
 
 # ─── En-tête : titre + langue ────────────────────────────────────────────────
 
@@ -1189,8 +1191,6 @@ with col_tabs:
     with tab_community:
         if st.session_state.get("_visit_error"):
             st.error(f"Debug tracker : {st.session_state['_visit_error']}")
-        if st.session_state.get("_visit_debug"):
-            st.info(f"Debug IP : {st.session_state['_visit_debug']}")
         _stats = get_visit_stats(days=30)
         _vdf   = _stats["visits_df"]
 
