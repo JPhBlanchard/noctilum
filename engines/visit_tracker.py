@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 
@@ -24,13 +23,6 @@ def track_visit() -> None:
 <script>
 (async () => {{
   try {{
-    // Injecter le CSS dans le document parent pour cacher cet iframe
-    try {{
-      const s = window.parent.document.createElement('style');
-      s.textContent = "iframe[height='0']{{display:none!important;min-height:0!important}}";
-      window.parent.document.head.appendChild(s);
-    }} catch(_) {{}}
-
     let ip = null, countryCode = null;
 
     // api.country.is : conçu pour CORS navigateur
@@ -74,7 +66,7 @@ def track_visit() -> None:
 }})();
 </script>
 """
-    components.html(html, height=0)
+    st.iframe(html, height="content")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
