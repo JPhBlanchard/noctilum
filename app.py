@@ -702,7 +702,15 @@ with col_tabs:
             )
 
         # ── Satellites ───────────────────────────────────────────────────────
-        st.subheader(_t("section_satellites"))
+        from engines.satellite_engine import _cache_path as _tle_cache_path
+        _tle_ref = _tle_cache_path("ISS / Stations")
+        if _tle_ref.exists():
+            import os as _os
+            _tle_mtime = datetime.fromtimestamp(_os.path.getmtime(_tle_ref), tz=timezone.utc)
+            st.subheader(_t("section_satellites"))
+            st.caption(f"TLE mis à jour le {_tle_mtime.strftime('%Y-%m-%d à %H:%M')} UTC")
+        else:
+            st.subheader(_t("section_satellites"))
         st.checkbox(_t("show_satellites_label"), key="show_satellites")
         if st.session_state.get("show_satellites"):
             from engines.satellite_engine import GROUPS, list_satellites
