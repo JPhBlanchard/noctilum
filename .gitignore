@@ -7,9 +7,6 @@ __pycache__/
 # Secrets
 .streamlit/secrets.toml
 
-# Données volumineuses — Hipparcos optionnel uniquement
-data/hip_main.dat
-
 # IDE
 .idea/
 .vscode/
