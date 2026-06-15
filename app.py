@@ -338,10 +338,10 @@ except Exception as exc:
     st.stop()
 
 # ─── Tracking visiteur (une seule fois par session) ──────────────────────────
-# get_client_ip_js() render un composant invisible ; retourne None au 1er pass.
-# track_visit() n'insère que quand l'IP est disponible (2e pass).
-_client_ip = get_client_ip_js()
-track_visit(_client_ip)
+# Render le composant JS seulement si la visite n'est pas encore enregistrée.
+if not st.session_state.get("visit_tracked"):
+    _client_ip = get_client_ip_js()
+    track_visit(_client_ip)
 
 # ─── En-tête : titre + langue ────────────────────────────────────────────────
 
