@@ -77,7 +77,7 @@ def track_visit() -> None:
     components.html(html, height=0)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_visit_stats(days: int = 30) -> dict:
     try:
         from supabase import create_client
