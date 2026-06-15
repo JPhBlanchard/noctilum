@@ -8,6 +8,8 @@ refresh-tle:
   image: python:3.11-slim
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
   before_script:
     - apt-get update -qq && apt-get install -y -qq git
   script:
