@@ -1,50 +1,61 @@
 import streamlit as st
-import streamlit.components.v1 as _components
 import pandas as pd
 from datetime import datetime, timezone, timedelta
+
+
+def _get_client_ip() -> str:
+    try:
+        headers = st.context.headers
+        forwarded = headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return headers.get("X-Real-IP", "")
+    except Exception:
+        return ""
+
+
+def _geolocate(ip: str) -> dict:
+    if not ip or ip.startswith("127.") or ip.startswith("192.168."):
+        return {}
+    try:
+        import requests
+        r = requests.get(
+            f"https://ip-api.com/json/{ip}",
+            params={"fields": "country,countryCode,city,region,lat,lon,org"},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
 
 
 def track_visit() -> None:
     if st.session_state.get("visit_tracked"):
         return
-    try:
-        supabase_url = st.secrets["SUPABASE_URL"]
-        supabase_key = st.secrets["SUPABASE_ANON_KEY"]
-    except Exception:
-        return
-
-    html = f"""<script>
-(async () => {{
-    try {{
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const {{ ip }} = await ipRes.json();
-        const geoRes = await fetch(
-            'https://ip-api.com/json/' + ip + '?fields=country,countryCode,city,region,lat,lon,org'
-        );
-        const geo = await geoRes.json();
-        await fetch('{supabase_url}/rest/v1/visits', {{
-            method: 'POST',
-            headers: {{
-                'apikey': '{supabase_key}',
-                'Content-Type': 'application/json'
-            }},
-            body: JSON.stringify({{
-                ip: ip,
-                country: geo.country,
-                country_code: geo.countryCode,
-                city: geo.city,
-                region: geo.region,
-                lat: geo.lat,
-                lon: geo.lon,
-                org: geo.org
-            }})
-        }});
-    }} catch(e) {{}}
-}})();
-</script>"""
-
-    _components.html(html, height=0)
     st.session_state["visit_tracked"] = True
+    try:
+        from supabase import create_client
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        client = create_client(url, key)
+
+        ip = _get_client_ip()
+        geo = _geolocate(ip)
+
+        client.table("visits").insert({
+            "ip":           ip or None,
+            "country":      geo.get("country"),
+            "country_code": geo.get("countryCode"),
+            "city":         geo.get("city"),
+            "region":       geo.get("region"),
+            "lat":          geo.get("lat"),
+            "lon":          geo.get("lon"),
+            "org":          geo.get("org"),
+        }).execute()
+    except Exception:
+        pass
 
 
 @st.cache_data(ttl=300, show_spinner=False)
