@@ -43,6 +43,7 @@ def build_community_map(visits_df: pd.DataFrame) -> folium.Map:
         tiles=None,
     )
     m.options["attributionControl"] = False
+    m.options["scrollWheelZoom"] = False
     folium.TileLayer(
         tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         attr=" ",

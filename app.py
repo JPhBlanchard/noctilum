@@ -528,11 +528,11 @@ with col_tabs:
         # Carte Folium
         _clat = float(st.session_state.lat)
         _clon = float(st.session_state.lon)
-        _fmap = folium.Map(location=[_clat, _clon], zoom_start=5, min_zoom=2, max_zoom=13, tiles=None)
+        _fmap = folium.Map(location=[_clat, _clon], zoom_start=5, min_zoom=2, tiles=None)
         _fmap.options["attributionControl"] = False
         folium.TileLayer(
             tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-            attr=" ", control=False,
+            attr=" ", control=False, min_zoom=2, max_zoom=13,
         ).add_to(_fmap)
         folium.Marker(
             [_clat, _clon],
