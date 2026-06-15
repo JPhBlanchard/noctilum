@@ -7,12 +7,8 @@ __pycache__/
 # Secrets
 .streamlit/secrets.toml
 
-# Données volumineuses (téléchargées automatiquement)
-data/de440s.bsp
+# Données volumineuses — Hipparcos optionnel uniquement
 data/hip_main.dat
-data/bsc5.json
-data/milkyway.png
-data/mw_density_n128.npy
 
 # IDE
 .idea/
