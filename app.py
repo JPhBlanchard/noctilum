@@ -1207,33 +1207,6 @@ with col_tabs:
         _comm_map = build_community_map(_vdf)
         st_folium(_comm_map, use_container_width=True, height=380, key="community_map")
 
-        if not _vdf.empty and "country" in _vdf.columns:
-            _counts = _vdf["country"].dropna().value_counts()
-            if not _counts.empty:
-                def _flag(code: str) -> str:
-                    try:
-                        return "".join(chr(0x1F1E0 + ord(c) - ord("A")) for c in code.upper()[:2])
-                    except Exception:
-                        return "🌍"
-                _max = int(_counts.iloc[0])
-                _bubbles = ""
-                for code, n in _counts.items():
-                    size = 48 + int(48 * n / _max)
-                    _bubbles += (
-                        f'<div style="display:flex;flex-direction:column;align-items:center;gap:4px">'
-                        f'<div style="width:{size}px;height:{size}px;border-radius:50%;'
-                        f'background:#0e2a45;border:2px solid #4fc3f7;'
-                        f'display:flex;flex-direction:column;align-items:center;justify-content:center;">'
-                        f'<span style="color:#4fc3f7;font-size:{max(14, size//3)}px;font-weight:bold;line-height:1">{n}</span>'
-                        f'</div>'
-                        f'<span style="color:#aaa;font-size:13px">{_flag(code)} {code}</span>'
-                        f'</div>'
-                    )
-                st.markdown(
-                    f'<div style="display:flex;flex-wrap:wrap;gap:16px;padding:12px 0;align-items:flex-end">'
-                    f'{_bubbles}</div>',
-                    unsafe_allow_html=True,
-                )
 
         st.caption(
             "Données anonymisées — seule l'IP publique est collectée à des fins statistiques. "
