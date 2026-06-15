@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def build_community_map(visits_df: pd.DataFrame) -> folium.Map:
-    m = folium.Map(location=[20, 0], zoom_start=2, tiles=None)
+    m = folium.Map(location=[20, 0], zoom_start=2, min_zoom=2, max_bounds=True, tiles=None)
     m.options["attributionControl"] = False
     folium.TileLayer(
         tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
