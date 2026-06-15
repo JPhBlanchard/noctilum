@@ -24,15 +24,15 @@ def track_visit() -> None:
 <script>
 (async () => {{
   try {{
-    const ip = await fetch('https://api.ipify.org?format=json')
-      .then(r => r.json()).then(d => d.ip).catch(() => '');
+    // ip-api.com sans IP = géolocalise le requêtant directement (le navigateur)
+    const geo = await fetch(
+      'https://ip-api.com/json?fields=status,country,countryCode,city,region,lat,lon,org,query'
+    ).then(r => r.json()).catch(e => {{ console.warn('[noctilum] geo failed:', e); return {{}}; }});
 
-    const geo = ip
-      ? await fetch('https://ip-api.com/json/' + ip + '?fields=country,countryCode,city,region,lat,lon,org')
-          .then(r => r.json()).catch(() => {{}})
-      : {{}};
+    console.log('[noctilum] geo:', JSON.stringify(geo));
 
-    await fetch('{supabase_url}/rest/v1/visits', {{
+    const ok = geo.status === 'success';
+    const resp = await fetch('{supabase_url}/rest/v1/visits', {{
       method: 'POST',
       headers: {{
         'apikey': '{supabase_key}',
@@ -41,17 +41,18 @@ def track_visit() -> None:
         'Prefer': 'return=minimal'
       }},
       body: JSON.stringify({{
-        ip:           ip   || null,
-        country:      geo.country      || null,
-        country_code: geo.countryCode  || null,
-        city:         geo.city         || null,
-        region:       geo.region       || null,
-        lat:          geo.lat          || null,
-        lon:          geo.lon          || null,
-        org:          geo.org          || null,
+        ip:           geo.query        || null,
+        country:      ok ? geo.country      : null,
+        country_code: ok ? geo.countryCode  : null,
+        city:         ok ? geo.city         : null,
+        region:       ok ? geo.region       : null,
+        lat:          ok ? geo.lat          : null,
+        lon:          ok ? geo.lon          : null,
+        org:          ok ? geo.org          : null,
       }})
     }});
-  }} catch(e) {{ console.warn('noctilum tracker:', e); }}
+    console.log('[noctilum] insert:', resp.status);
+  }} catch(e) {{ console.warn('[noctilum] tracker error:', e); }}
 }})();
 </script>
 """
