@@ -24,14 +24,14 @@ def track_visit() -> None:
 <script>
 (async () => {{
   try {{
-    // ip-api.com sans IP = géolocalise le requêtant directement (le navigateur)
-    const geo = await fetch(
-      'https://ip-api.com/json?fields=status,country,countryCode,city,region,lat,lon,org,query'
-    ).then(r => r.json()).catch(e => {{ console.warn('[noctilum] geo failed:', e); return {{}}; }});
+    // ipwho.is : CORS permissif, geolocate automatiquement le requêtant
+    const geo = await fetch('https://ipwho.is/')
+      .then(r => r.json())
+      .catch(e => {{ console.warn('[noctilum] geo failed:', e); return {{}}; }});
 
     console.log('[noctilum] geo:', JSON.stringify(geo));
 
-    const ok = geo.status === 'success';
+    const ok = geo.success === true;
     const resp = await fetch('{supabase_url}/rest/v1/visits', {{
       method: 'POST',
       headers: {{
@@ -41,14 +41,14 @@ def track_visit() -> None:
         'Prefer': 'return=minimal'
       }},
       body: JSON.stringify({{
-        ip:           geo.query        || null,
-        country:      ok ? geo.country      : null,
-        country_code: ok ? geo.countryCode  : null,
-        city:         ok ? geo.city         : null,
-        region:       ok ? geo.region       : null,
-        lat:          ok ? geo.lat          : null,
-        lon:          ok ? geo.lon          : null,
-        org:          ok ? geo.org          : null,
+        ip:           geo.ip                        || null,
+        country:      ok ? geo.country              : null,
+        country_code: ok ? geo.country_code         : null,
+        city:         ok ? geo.city                 : null,
+        region:       ok ? geo.region               : null,
+        lat:          ok ? geo.latitude             : null,
+        lon:          ok ? geo.longitude            : null,
+        org:          ok ? (geo.connection?.org || null) : null,
       }})
     }});
     console.log('[noctilum] insert:', resp.status);
