@@ -338,6 +338,11 @@ except Exception as exc:
     st.stop()
 
 # ─── Tracking visiteur (une seule fois par session) ──────────────────────────
+# CSS pour masquer l'iframe du tracker (height=0 ne suffit plus en Streamlit 1.58)
+st.markdown(
+    "<style>iframe[height='0']{display:none!important;min-height:0!important}</style>",
+    unsafe_allow_html=True,
+)
 track_visit()
 
 # ─── En-tête : titre + langue ────────────────────────────────────────────────

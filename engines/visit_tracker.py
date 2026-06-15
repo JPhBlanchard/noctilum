@@ -24,15 +24,26 @@ def track_visit() -> None:
 <script>
 (async () => {{
   try {{
-    // ipwho.is : CORS permissif, geolocate automatiquement le requêtant
-    const geo = await fetch('https://ipwho.is/')
-      .then(r => r.json())
-      .catch(e => {{ console.warn('[noctilum] geo failed:', e); return {{}}; }});
+    let ip = null, countryCode = null;
 
-    console.log('[noctilum] geo:', JSON.stringify(geo));
+    // api.country.is : conçu pour le CORS navigateur
+    try {{
+      const d = await fetch('https://api.country.is/').then(r => r.json());
+      ip = d.ip || null;
+      countryCode = d.country || null;
+    }} catch(_) {{
+      // Fallback : langue du navigateur (approximatif mais universel)
+      const lang = navigator.language || '';
+      const parts = lang.split('-');
+      if (parts.length > 1) {{
+        const c = parts[parts.length - 1].toUpperCase();
+        if (/^[A-Z]{{2}}$/.test(c)) countryCode = c;
+      }}
+    }}
 
-    const ok = geo.success === true;
-    const resp = await fetch('{supabase_url}/rest/v1/visits', {{
+    console.log('[noctilum] ip:', ip, 'country:', countryCode);
+
+    await fetch('{supabase_url}/rest/v1/visits', {{
       method: 'POST',
       headers: {{
         'apikey': '{supabase_key}',
@@ -41,17 +52,17 @@ def track_visit() -> None:
         'Prefer': 'return=minimal'
       }},
       body: JSON.stringify({{
-        ip:           geo.ip                        || null,
-        country:      ok ? geo.country              : null,
-        country_code: ok ? geo.country_code         : null,
-        city:         ok ? geo.city                 : null,
-        region:       ok ? geo.region               : null,
-        lat:          ok ? geo.latitude             : null,
-        lon:          ok ? geo.longitude            : null,
-        org:          ok ? (geo.connection?.org || null) : null,
+        ip:           ip,
+        country_code: countryCode,
+        country:      null,
+        city:         null,
+        region:       null,
+        lat:          null,
+        lon:          null,
+        org:          null,
       }})
     }});
-    console.log('[noctilum] insert:', resp.status);
+    console.log('[noctilum] insert done');
   }} catch(e) {{ console.warn('[noctilum] tracker error:', e); }}
 }})();
 </script>
@@ -87,16 +98,21 @@ def get_visit_stats(days: int = 30) -> dict:
         if not visits_df.empty and "ts" in visits_df.columns:
             visits_df["ts"] = pd.to_datetime(visits_df["ts"], utc=True)
 
-        unique_countries = int(visits_df["country"].nunique()) if not visits_df.empty else 0
-        top_countries = (
-            visits_df.groupby("country")
-            .size()
-            .sort_values(ascending=False)
-            .head(10)
-            .reset_index()
-            .values.tolist()
-            if not visits_df.empty else []
-        )
+        if not visits_df.empty:
+            # Utilise country_code si country est absent
+            col = "country" if visits_df["country"].notna().any() else "country_code"
+            unique_countries = int(visits_df[col].nunique())
+            top_countries = (
+                visits_df.groupby(col)
+                .size()
+                .sort_values(ascending=False)
+                .head(10)
+                .reset_index()
+                .values.tolist()
+            )
+        else:
+            unique_countries = 0
+            top_countries = []
 
         return {
             "total": total,
