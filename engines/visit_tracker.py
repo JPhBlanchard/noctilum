@@ -74,7 +74,8 @@ def get_visit_stats(days: int = 30) -> dict:
     try:
         from supabase import create_client
         url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_ANON_KEY"]
+        # Service role key bypasses RLS — used server-side only, never exposed to the browser
+        key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets["SUPABASE_ANON_KEY"]
         supabase = create_client(url, key)
 
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
