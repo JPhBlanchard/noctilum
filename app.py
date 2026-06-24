@@ -370,7 +370,7 @@ with _hcol2:
             label_visibility="collapsed",
         )
     with _habout:
-        with st.popover(_t("about_btn"), use_container_width=True):
+        with st.popover("ℹ️", use_container_width=True):
             st.markdown(_t("about_text"))
 
 # ─── Colonnes principales : carte (gauche) + onglets (droite) ────────────────
